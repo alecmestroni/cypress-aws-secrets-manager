@@ -1,6 +1,6 @@
 {
   "name": "cypress-aws-secret-manager",
-  "version": "0.0.1",
+  "version": "0.1.1",
   "description": "cypress plugin to load aws secrets as env var",
   "main": "index.js",
   "scripts": {
@@ -14,7 +14,7 @@
     "aws",
     "cypress",
     "secret",
-    "secretmanager",
+    "secretsmanager",
     "aws-secrets-manager",
     "env"
   ],
