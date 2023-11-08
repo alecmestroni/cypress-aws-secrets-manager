@@ -1,19 +1,29 @@
-# Cypress-Env | A Cypress plugin to handle multi environment
+# Load AWS Secrets into Cypress as env-variable
 
-[![npm version](https://badge.fury.io/js/cypress-env.svg)](https://badge.fury.io/js/cypress-env)
+A plugin that allows a secret stored in the AWS Secrets Manager to be loaded into cypress as an environment variable.
 
-Cypress plugin to handle different environment easly
+<h3 align="center">
+  <a href="https://www.npmjs.com/package/cypress-aws-secret-manager">
+    <img src="https://img.shields.io/npm/v/cypress-aws-secret-manager" align="center" />
+  </a>
+  <a href="https://www.npmjs.com/package/cypress-aws-secret-manager">
+    <img src="https://img.shields.io/npm/dm/cypress-aws-secret-manager"  align="center" />
+  </a>
+  <a href="https://paypal.me/AlecMestroni?country.x=IT&locale.x=it_IT">
+    <img src="https://raw.githubusercontent.com/alecmestroni/cypress-xray-junit-reporter/main/img/badge.svg" align="center" />
+  </a>
+</h3>
 
-## Installation
+## Install
 
 ```shell
-$ npm install cypress-env --save-dev
+$ npm install cypress-aws-secret-manager --save-dev
 ```
 
 or as a global module
 
 ```shell
-$ npm install -g cypress-env
+$ npm install -g cypress-aws-secret-manager
 ```
 
 ## Configuration
@@ -22,47 +32,52 @@ $ npm install -g cypress-env
 
 In your cypress.config.js file:
 
-```
+```javascript
 module.exports = defineConfig({
- e2e: {
-  setupNodeEvents(on, config) {
-   require('cypress-xray-junit-reporter/plugin')(on, config, __dirname)
-  },
- },
+	e2e: {
+		async setupNodeEvents(on, config) {
+			const getSecretFromAWS = require('cypress-aws-secret-manager')
+			await getSecretFromAWS(on, config)
+		},
+	},
 })
 ```
 
-### Create the env.config folder:
+### Define AWS login strategy
 
-Then configure a folder named `env.config' with your environments.json files:
+- **AWS_SSO_STRATEGY**: `'profile'|'default'|'unset'|'multi'`
+  - If `profile` will use the profile name specified inside the awsSecretsManagerConfig (If the profile is not specified, the default profile will be used).
+  - If `default` will use the default sso config.
+  - If `unset` will login without sso authentication, used mostly when running cypress on CI tools, cause them are already authenticated.
+  - If `multi` will try with every strategy, fails only after trying them all.
 
-```bash
-├── cypress
-│   ├── e2e
-│   ├── fixtures
-│   └── support
-├── cypress.config.js
-├── env.config
-│   ├── test.json
-│   ├── stage.json
-│   └── prod.json
-├── node_modules
-├── README.md
-├── package-lock.json
-├── package.json
-└── .gitignore
-```
+If not specified the 'multi' strategy will be used.
 
-### Add your environment.json files:
+### Define awsSecretsManagerConfig object:
 
-JSON files must respect this sintax:
+The awsSecretsManagerConfig is an object containing the following parameters:
+| Parameter | Mandatory | Notes |
+| ---------- | --------- | -------------------------- |
+| secretName | TRUE | AWS secret name |
+| profile | FALSE | AWS SSO profile name, if not set the plugin will use 'default' profile |
+| region | TRUE | AWS Secrets Manager region |
+
+## Pass your AWS configuration to cypress
+
+After defining your strategy and your awsSecretsManagerConfig.  
+I propose two solutions for you to import this configuration into cypress, it's up to you to decide which one to choose
+
+### "Easy" way with [cypress-env](https://www.npmjs.com/package/cypress-env) plugin:
+
+**PRO**: Zero code solution  
+**CONS**: [cypress-env](https://www.npmjs.com/package/cypress-env) needed
+
+Following the plugin's guide, you should end up with a JSON file, which must respect this syntax:
 
 ```json
-//test.json
+//environment.json
 {
 	"baseUrl": "https://www.google.com",
-	"specPattern": "cypress/e2e/**/**.js",
-	"excludeSpecPattern": "cypress/e2e/**/toExlude.js",
 	"env": {
 		"var1": "value1",
 		"var2": "value2",
@@ -71,66 +86,201 @@ JSON files must respect this sintax:
 }
 ```
 
-| Parameter          | Mandatory | Overwrites value in cypress.config.js | Notes                                    |
-| ------------------ | --------- | ------------------------------------- | ---------------------------------------- |
-| baseUrl            | FALSE     | TRUE                                  | Overwrites value in cypress.config.js    |
-| specPattern        | FALSE     | TRUE                                  | Overwrites value in cypress.config.js    |
-| excludeSpecPattern | FALSE     | TRUE                                  | Overwrites value in cypress.config.js    |
-| env                | FALSE     | FALSE                                 | OBJ added to values in cypress.config.js |
+Simply add **"AWS_SSO_STRATEGY"** inside the "env" object and add **awsSecretsManagerConfig** as follows:
 
-### Open or run cypress with the correct environment variables:
-
-Open cypress and inject the envName variables:
-
-```bash
-npx cypress open -e envName=test
+```json
+//environment.json
+{
+	"baseUrl": "https://www.google.com",
+	"env": {
+		"AWS_SSO_STRATEGY": "strategy_type",
+		"var1": "value1",
+		"var2": "value2",
+		"var3": "value3"
+	},
+	"awsSecretsManagerConfig": {
+		"secretName": "AWS_SECRET_NAME",
+		"profile": "AWS_PROFILE_NAME",
+		"region": "AWS_REGION"
+	}
+}
 ```
 
-or run cypress and inject the envName variables:
+**No other changes needed**
 
-```bash
-npx cypress run -e envName=test
+### "Complex" way inside cypress.config.js:
+
+**PRO**: No cypress-env needed  
+**CONS**: Solution with some code
+
+```javascript
+//cypress.config.js
+module.exports = defineConfig({
+	e2e: {
+		async setupNodeEvents(on, config) {
+			const option = {
+				awsSecretsManagerConfig: {
+					secretName: 'AWS_SECRET_NAME',
+					profile: 'AWS_PROFILE_NAME',
+					region: 'AWS_REGION',
+				},
+			}
+			config = {
+				...config,
+				...option,
+			}
+			const getSecretFromAWS = require('cypress-aws-secret-manager')
+			await getSecretFromAWS(on, config)
+		},
+	},
+	env: {
+		AWS_SSO_STRATEGY: 'strategy_type',
+	},
+})
 ```
 
-The log will be something like this:
+## Overwrite AWS_SSO_STRATEGY property when running on a different machine or on CI
 
+Sometimes you'll need to override the AWS_SSO_STRATEGY property that was provided inside cypress.config.env.  
+To do so, you'll need to run cypress with the following command:
+
+```shell
+npx cypress run -e AWS_SSO_STRATEGY=$OVERWRITING_AWS_SSO_STRATEGY
 ```
+
+Where **$OVERWRITING_AWS_SSO_STRATEGY** is the new strategy value.
+
+## Results
+
+### Correct configuration
+
+```shell
 ====================================================================================================
 
-Extracting local configurations from: "path/to/environment.json"
+Starting plugin: cypress-aws-secret-manager
 
- - baseUrl: "https://www.google.com"
- - specPattern: "cypress/e2e/**/**.js"
- - excludeSpecPattern: "cypress/e2e/**/toExlude.js",
- - env: "{
-    "var1": "value1",
-    "var2": "value2",
-    "var3": "value3",
-    "envName": "test"
+AWS SSO strategy: profile
+
+1st attempt: Trying to login into AWS with profile: "AWS_PROFILE_NAME"
+
+AWS SDK credentials are set up correctly!
+
+Extracting secret from: "AWS Secrets Manger"
+
+secret: "{
+    "username": "*****",
+    "password": "*****"
 }"
 
-√ Configurations loaded correctly for the environment: < TEST >
+√ Secret loaded correctly from: "AWS_SECRET_NAME"
+
+====================================================================================================
 ```
 
-### Little tip for you
+### Missing configuration
 
-In your package.json file add a script like this:
+**Description**  
+Cypress has starter without plugin configurations
+
+```shell
+====================================================================================================
+
+Starting plugin: cypress-aws-secret-manager
+
+√ Missing awsSecretsManagerConfig, continue without secrets!
+
+====================================================================================================
+```
+
+### Wrong configuration
+
+**Description**  
+Properties: secretName & region are mandatory
+
+```shell
+====================================================================================================
+
+Starting plugin: cypress-aws-secret-manager
+
+ConfigurationError!
+"awsSecretsManagerConfig" object MUST contains these mandatory properties: secretName,region
+
+Passed: {
+ "profile": "AWS_PROFILE_NAME"
+}
+Missing: [
+ "secretName",
+ "region"
+]
+
+====================================================================================================
+```
+
+### Wrong credentials
+
+**Description**  
+Your credentials are invalid
+
+```shell
+====================================================================================================
+
+Starting plugin: cypress-aws-secret-manager
+
+AWS SSO strategy: "multi"
+
+1st attempt: Trying to login into AWS with profile: "AWS_PROFILE_NAME"
+
+2nd attempt: Trying to login into AWS with profile: "default"
+
+3rd attempt: Trying without specifying credentials
+
+Incorrect plugin configuration!
+ERROR: Could not load credentials from any providers
+
+====================================================================================================
+```
+
+## Little tip for you
+
+You can create a bash file that verifies if you are already logged into the AWS account:  
+**NB Change AWS_PROFILE_NAME with your profile name**
+
+```bash
+#awslogin_script.sh
+
+#!/bin/bash
+
+# Check to see if we are already logged in
+SSO_ACCOUNT=$(aws sts get-caller-identity --query "Account" --profile AWS_PROFILE_NAME)
+
+# If response is the sso_account_id we are already logged in (it has length 14)
+if [ ${#SSO_ACCOUNT} -eq 14 ];  then
+echo "AWS SSO session still valid, no login needed" ;
+
+# Else we login with "aws sso login --profile AWS_PROFILE_NAME"
+else
+echo "" ; echo "AWS SSO session expired, login needed" ; echo ""
+aws sso login --profile AWS_PROFILE_NAME
+
+fi
+```
+
+Then in your package.json file create a script like this:
 
 ```json
 //package.json
 {
 	"scripts": {
-		"cy:test": "npx cypress open -e envName=test",
-		"cy:stage": "npx cypress open -e envName=stage",
-		"cy:prod": "npx cypress open -e envName=prod"
+		"cy:open": "sh awslogin_script.sh && npx cypress open",
+		"cy:run": "sh awslogin_script.sh && npx cypress run"
 	}
 }
 ```
 
-So you'll only have to type this command to open cypress in the correct environment:
+So you'll only have to type this command to open cypress and login into aws:
 
 ```bash
-npm run cy:test
+npm run cy:open
 ```
 
 ## THE JOB IS DONE!
@@ -138,3 +288,13 @@ npm run cy:test
 Happy testing to everyone!
 
 ALEC-JS
+
+<h3 align="center">
+🙌 Donate to support my work & further development! 🙌
+</h3>
+
+<h3 align="center">
+  <a href="https://paypal.me/AlecMestroni?country.x=IT&locale.x=it_IT">
+    <img src="https://raw.githubusercontent.com/alecmestroni/cypress-xray-junit-reporter/main/img/badge.svg" width="111" align="center" />
+  </a>
+</h3>
