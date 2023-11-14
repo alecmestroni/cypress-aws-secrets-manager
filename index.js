@@ -10,7 +10,7 @@ module.exports = async (on, config) => {
     console.log(separator)
     const mandatoryProperties = ['secretName', 'region']
     let missingProperties = []
-    console.log('Starting plugin: ' + chalk.green('cypress-aws-secret-manager\n'))
+    console.log('Starting plugin: ' + chalk.green('cypress-aws-secrets-manager\n'))
     if (config.awsSecretsManagerConfig) {
         const awsSecretsManagerConfig = config.awsSecretsManagerConfig
         if (!awsSecretsManagerConfig.secretName || !awsSecretsManagerConfig.region) {

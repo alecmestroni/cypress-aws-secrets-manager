@@ -3,11 +3,11 @@
 Integrate the power of AWS Secrets Manager seamlessly into your Cypress tests with the cypress-aws-secrets-manager plugin. This lightweight yet powerful plugin facilitates the secure loading of secrets stored in AWS Secrets Manager directly into your Cypress environment variables, ensuring a streamlined and secure approach to managing sensitive information in your test scripts.
 
 <h3 align="center">
-  <a href="https://www.npmjs.com/package/cypress-aws-secret-manager">
-    <img src="https://img.shields.io/npm/v/cypress-aws-secret-manager" align="center" />
+  <a href="https://www.npmjs.com/package/cypress-aws-secrets-manager">
+    <img src="https://img.shields.io/npm/v/cypress-aws-secrets-manager" align="center" />
   </a>
-  <a href="https://www.npmjs.com/package/cypress-aws-secret-manager">
-    <img src="https://img.shields.io/npm/dm/cypress-aws-secret-manager"  align="center" />
+  <a href="https://www.npmjs.com/package/cypress-aws-secrets-manager">
+    <img src="https://img.shields.io/npm/dm/cypress-aws-secrets-manager"  align="center" />
   </a>
   <a href="https://paypal.me/AlecMestroni?country.x=IT&locale.x=it_IT">
     <img src="https://raw.githubusercontent.com/alecmestroni/cypress-xray-junit-reporter/main/img/badge.svg" align="center" />
@@ -17,13 +17,13 @@ Integrate the power of AWS Secrets Manager seamlessly into your Cypress tests wi
 ## Install
 
 ```shell
-$ npm install cypress-aws-secret-manager --save-dev
+$ npm install cypress-aws-secrets-manager --save-dev
 ```
 
 or as a global module
 
 ```shell
-$ npm install -g cypress-aws-secret-manager
+$ npm install -g cypress-aws-secrets-manager
 ```
 
 ## Prerequisites
@@ -41,7 +41,7 @@ In your cypress.config.js file:
 module.exports = defineConfig({
 	e2e: {
 		async setupNodeEvents(on, config) {
-			const getSecretFromAWS = require('cypress-aws-secret-manager')
+			const getSecretFromAWS = require('cypress-aws-secrets-manager')
 			await getSecretFromAWS(on, config)
 		},
 	},
@@ -134,7 +134,7 @@ module.exports = defineConfig({
 				...config,
 				...option,
 			}
-			const getSecretFromAWS = require('cypress-aws-secret-manager')
+			const getSecretFromAWS = require('cypress-aws-secrets-manager')
 			await getSecretFromAWS(on, config)
 		},
 	},
@@ -162,7 +162,7 @@ Where **$OVERWRITING_AWS_SSO_STRATEGY** is the new strategy value.
 ```shell
 ====================================================================================================
 
-Starting plugin: cypress-aws-secret-manager
+Starting plugin: cypress-aws-secrets-manager
 
 AWS SSO strategy: profile
 
@@ -190,7 +190,7 @@ Cypress has starter without plugin configurations
 ```shell
 ====================================================================================================
 
-Starting plugin: cypress-aws-secret-manager
+Starting plugin: cypress-aws-secrets-manager
 
 √ Missing awsSecretsManagerConfig, continue without secrets!
 
@@ -205,7 +205,7 @@ Properties: secretName & region are mandatory
 ```shell
 ====================================================================================================
 
-Starting plugin: cypress-aws-secret-manager
+Starting plugin: cypress-aws-secrets-manager
 
 ConfigurationError!
 "awsSecretsManagerConfig" object MUST contains these mandatory properties: secretName,region
@@ -229,7 +229,7 @@ Your credentials are invalid
 ```shell
 ====================================================================================================
 
-Starting plugin: cypress-aws-secret-manager
+Starting plugin: cypress-aws-secrets-manager
 
 AWS SSO strategy: "multi"
 
