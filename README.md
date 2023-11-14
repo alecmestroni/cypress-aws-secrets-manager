@@ -1,6 +1,6 @@
 # Load AWS Secrets into Cypress as env-variable
 
-A plugin that allows a secret stored in the AWS Secrets Manager to be loaded into cypress as an environment variable.
+Integrate the power of AWS Secrets Manager seamlessly into your Cypress tests with the cypress-aws-secrets-manager plugin. This lightweight yet powerful plugin facilitates the secure loading of secrets stored in AWS Secrets Manager directly into your Cypress environment variables, ensuring a streamlined and secure approach to managing sensitive information in your test scripts.
 
 <h3 align="center">
   <a href="https://www.npmjs.com/package/cypress-aws-secret-manager">
@@ -25,6 +25,11 @@ or as a global module
 ```shell
 $ npm install -g cypress-aws-secret-manager
 ```
+
+## Prerequisites
+
+- AWS CLI [Install/Update](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+- A user to SSO via [AWS Identity and Access Management](https://docs.aws.amazon.com/iam/).
 
 ## Configuration
 

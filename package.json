@@ -1,7 +1,7 @@
 {
-  "name": "cypress-aws-secret-manager",
-  "version": "0.3.6",
-  "description": "A plugin that allows a secret stored in the AWS secret manager to be loaded into cypress as an environment variable.",
+  "name": "cypress-aws-secrets-manager",
+  "version": "0.3.9",
+  "description": "Cypress Plugin | Integrate the power of AWS Secrets Manager seamlessly into your Cypress tests with the cypress-aws-secrets-manager plugin. This lightweight yet powerful plugin facilitates the secure loading of secrets stored in AWS Secrets Manager directly into your Cypress environment variables.",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -27,5 +27,8 @@
   "dependencies": {
     "chalk": "^4.1.2",
     "number-to-words": "^1.2.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.2.2"
   }
 }
