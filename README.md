@@ -39,20 +39,21 @@ In your cypress.config.js file:
 
 ```javascript
 module.exports = defineConfig({
-	e2e: {
-		async setupNodeEvents(on, config) {
-			const getSecretFromAWS = require('cypress-aws-secrets-manager')
-			await getSecretFromAWS(on, config)
-		},
-	},
+  e2e: {
+    async setupNodeEvents(on, config, __dirname) {
+      const getSecretFromAWS = require("cypress-aws-secrets-manager")
+      await getSecretFromAWS(on, config, __dirname)
+    },
+  },
 })
 ```
 
 ### Define AWS login strategy
 
-- **AWS_SSO_STRATEGY**: `'profile'|'default'|'unset'|'multi'`
+- **AWS_SSO_STRATEGY**: `'profile'|'default'|'iam'|'unset'|'multi'`
   - If `profile` will use the profile name specified inside the awsSecretsManagerConfig (If the profile is not specified, the default profile will be used).
   - If `default` will use the default sso config.
+  - If `iam` will log with aws credentials, need access_key, secret_key and session_token specified in a pathToCredential variable.
   - If `unset` will login without sso authentication, used mostly when running cypress on CI tools, cause them are already authenticated.
   - If `multi` will try with every strategy, fails only after trying them all.
 
@@ -66,6 +67,19 @@ The awsSecretsManagerConfig is an object containing the following parameters:
 | secretName | TRUE | AWS secret name |
 | profile | FALSE | AWS SSO profile name, if not set the plugin will use 'default' profile |
 | region | TRUE | AWS Secrets Manager region |
+| pathToCredentials | WITH STRATEGY 'IAM' | path to credentials file |
+
+### Credential File example:
+
+```json
+//pathToCredentials.json
+
+{
+  "accessKeyId": "xxxxxx",
+  "secretAccessKey": "xxxxxx",
+  "sessionToken": "xxxxxx"
+}
+```
 
 ## Pass your AWS configuration to cypress
 
@@ -82,12 +96,12 @@ Following the plugin's guide, you should end up with a JSON file, which must res
 ```json
 //environment.json
 {
-	"baseUrl": "https://www.google.com",
-	"env": {
-		"var1": "value1",
-		"var2": "value2",
-		"var3": "value3"
-	}
+  "baseUrl": "https://www.google.com",
+  "env": {
+    "var1": "value1",
+    "var2": "value2",
+    "var3": "value3"
+  }
 }
 ```
 
@@ -96,18 +110,19 @@ Simply add **"AWS_SSO_STRATEGY"** inside the "env" object and add **awsSecretsMa
 ```json
 //environment.json
 {
-	"baseUrl": "https://www.google.com",
-	"env": {
-		"AWS_SSO_STRATEGY": "strategy_type",
-		"var1": "value1",
-		"var2": "value2",
-		"var3": "value3"
-	},
-	"awsSecretsManagerConfig": {
-		"secretName": "AWS_SECRET_NAME",
-		"profile": "AWS_PROFILE_NAME",
-		"region": "AWS_REGION"
-	}
+  "baseUrl": "https://www.google.com",
+  "env": {
+    "AWS_SSO_STRATEGY": "strategy_type",
+    "var1": "value1",
+    "var2": "value2",
+    "var3": "value3"
+  },
+  "awsSecretsManagerConfig": {
+    "secretName": "AWS_SECRET_NAME",
+    "profile": "AWS_PROFILE_NAME",
+    "region": "AWS_REGION",
+    "pathToCredentials": "PATH_TO_AWS_CREDENTIALS"
+  }
 }
 ```
 
@@ -121,26 +136,27 @@ Simply add **"AWS_SSO_STRATEGY"** inside the "env" object and add **awsSecretsMa
 ```javascript
 //cypress.config.js
 module.exports = defineConfig({
-	e2e: {
-		async setupNodeEvents(on, config) {
-			const option = {
-				awsSecretsManagerConfig: {
-					secretName: 'AWS_SECRET_NAME',
-					profile: 'AWS_PROFILE_NAME',
-					region: 'AWS_REGION',
-				},
-			}
-			config = {
-				...config,
-				...option,
-			}
-			const getSecretFromAWS = require('cypress-aws-secrets-manager')
-			await getSecretFromAWS(on, config)
-		},
-	},
-	env: {
-		AWS_SSO_STRATEGY: 'strategy_type',
-	},
+  e2e: {
+    async setupNodeEvents(on, config, __dirname) {
+      const option = {
+        awsSecretsManagerConfig: {
+          secretName: "AWS_SECRET_NAME",
+          profile: "AWS_PROFILE_NAME",
+          region: "AWS_REGION",
+          pathToCredentials: "PATH_TO_AWS_CREDENTIALS.JSON",
+        },
+      }
+      config = {
+        ...config,
+        ...option,
+      }
+      const getSecretFromAWS = require("cypress-aws-secrets-manager")
+      await getSecretFromAWS(on, config, __dirname)
+    },
+  },
+  env: {
+    AWS_SSO_STRATEGY: "strategy_type",
+  },
 })
 ```
 
@@ -275,10 +291,10 @@ Then in your package.json file create a script like this:
 ```json
 //package.json
 {
-	"scripts": {
-		"cy:open": "sh awslogin_script.sh && npx cypress open",
-		"cy:run": "sh awslogin_script.sh && npx cypress run"
-	}
+  "scripts": {
+    "cy:open": "sh awslogin_script.sh && npx cypress open",
+    "cy:run": "sh awslogin_script.sh && npx cypress run"
+  }
 }
 ```
 

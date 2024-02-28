@@ -1,12 +1,15 @@
 const chalk = require("chalk");
 const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client-secrets-manager");
 const { fromSSO } = require("@aws-sdk/credential-providers");
+const path = require('path');
+const fs = require('fs');
 const separator = chalk.grey('\n====================================================================================================\n')
 const converter = require('number-to-words');
 
 let client;
-
-module.exports = async (on, config) => {
+let directory
+module.exports = async (on, config, directoryTemp) => {
+    directory = directoryTemp
     console.log(separator)
     const mandatoryProperties = ['secretName', 'region']
     let missingProperties = []
@@ -60,7 +63,7 @@ const handleProfileNotFound = (awsSecretsManagerConfig, errorMessage, strategy) 
 
 async function getSecretsFromAws(awsSecretsManagerConfig, strategy) {
     let count = 0;
-    const strategyTypes = ['profile', 'default', 'unset', 'multi'];
+    const strategyTypes = ['profile', 'default', 'unset', 'multi', 'iam'];
     let response;
 
     while (++count <= strategyTypes.length) {
@@ -70,8 +73,24 @@ async function getSecretsFromAws(awsSecretsManagerConfig, strategy) {
         try {
             if (strategy === 'default') {
                 awsSecretsManagerConfig.profile = 'default';
-            }
-            if (!client && awsSecretsManagerConfig.profile && strategy !== 'unset') {
+            } else if (strategy === 'iam') {
+                if (awsSecretsManagerConfig.pathToCredentials) {
+                    const credentialsFilename = path.join(directory, awsSecretsManagerConfig.pathToCredentials)
+                    const credentials = require(credentialsFilename)
+                    const hiddenCredentials = {}
+                    Object.keys(credentials).forEach(key => {
+                        hiddenCredentials[key] = "".padStart(5, '*');
+                    });
+                    console.log('\n' + converter.toOrdinal(count) + ' attempt: Trying to login into AWS with IAM credentials.\n' + chalk.cyan('\nCredentials imported correctly: ') + chalk.white(JSON.stringify(hiddenCredentials, null, 1)));
+                    client = new SecretsManagerClient({
+                        region: awsSecretsManagerConfig.region,
+                        credentials: credentials
+                    })
+                    // deleteFile(credentialsFilename)
+                } else {
+                    throwException('Missing \'pathToCredentials\' variable in awsSecretsManagerConfig, n');
+                };
+            } else if (!client && awsSecretsManagerConfig.profile && strategy !== ('unset' && 'iam')) {
                 console.log('\n' + converter.toOrdinal(count) + ' attempt: Trying to login into AWS with profile: ' + chalk.cyan(JSON.stringify(awsSecretsManagerConfig.profile)));
                 client = new SecretsManagerClient({
                     region: awsSecretsManagerConfig.region,
@@ -92,7 +111,7 @@ async function getSecretsFromAws(awsSecretsManagerConfig, strategy) {
 
             console.log(chalk.green('\n√ ') + 'AWS SDK credentials are set up correctly!\n');
             console.log('Extracting secret from: ' + chalk.cyan('"AWS Secrets Manager"\n'));
-            break;
+            break
         } catch (error) {
             handleProfileNotFound(awsSecretsManagerConfig, error.message, strategy);
         }
@@ -118,4 +137,14 @@ async function loadAwsSecrets(config, awsSecretsManagerConfig) {
     });
     console.log(chalk.yellow("secret: ") + `${JSON.stringify(secret, null, 1)}"`)
     console.log(chalk.green('\n√ ') + chalk.white('Secret loaded correctly from: ') + chalk.cyan('"' + awsSecretsManagerConfig.secretName + '"'))
+}
+
+function deleteFile(path) {
+    fs.unlink(path, (err) => {
+        if (err) {
+            console.error('Error while deleting the file', err);
+            return;
+        }
+        console.log('File deleted successfully');
+    });
 }
