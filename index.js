@@ -1,35 +1,27 @@
-const chalk = require("chalk");
-const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client-secrets-manager");
+const { SecretsManagerClient, GetSecretValueCommand, ListSecretsCommand } = require("@aws-sdk/client-secrets-manager");
 const { fromSSO } = require("@aws-sdk/credential-providers");
+const converter = require('number-to-words');
+const chalk = require("chalk");
 const path = require('path');
 const fs = require('fs');
-const separator = chalk.grey('\n====================================================================================================\n')
-const converter = require('number-to-words');
 
-let client;
+const separator = chalk.grey('\n====================================================================================================\n')
+const strategyTypes = ['profile', 'default', 'unset', 'iam', 'multi'];
+let errorAlreadyThrowed = false
 let directory
+let response
+let client
+
 module.exports = async (on, config, directoryTemp) => {
     directory = directoryTemp
     console.log(separator)
-    const mandatoryProperties = ['secretName', 'region']
-    let missingProperties = []
     console.log('Starting plugin: ' + chalk.green('cypress-aws-secrets-manager\n'))
     if (config.awsSecretsManagerConfig) {
         const awsSecretsManagerConfig = config.awsSecretsManagerConfig
-        if (!awsSecretsManagerConfig.secretName || !awsSecretsManagerConfig.region) {
-            console.log(chalk.red('ConfigurationError!\n') + chalk.yellow('The "awsSecretsManagerConfig" object MUST contain these mandatory properties: secretName, region: ') + chalk.white(mandatoryProperties))
-            console.log(chalk.green('\nPassed: ') + JSON.stringify(awsSecretsManagerConfig, null, 1))
-            mandatoryProperties.forEach((property) => {
-                Object.keys(awsSecretsManagerConfig).forEach(item => {
-                    if (property !== item) {
-                        missingProperties.push(property)
-                    }
-                })
-            })
-            console.log(chalk.red('Missing: ') + JSON.stringify(missingProperties, null, 1))
-            console.log(separator)
-            throw new Error('The "awsSecretsManagerConfig" object MUST contain these mandatory properties: secretName, region: ' + mandatoryProperties)
-        }
+        const mandatoryKeys = ['secretName', 'region']
+
+        checkOnMandatoryKeys(awsSecretsManagerConfig, mandatoryKeys)
+
         await loadAwsSecrets(config, awsSecretsManagerConfig)
     } else {
         console.log(chalk.green('√ ') + chalk.white('Missing awsSecretsManagerConfig, continue without secrets!'))
@@ -37,91 +29,21 @@ module.exports = async (on, config, directoryTemp) => {
     return config;
 };
 
-const throwException = (errorMessage) => {
-    console.log(chalk.red('\nIncorrect plugin configuration!'));
-    console.log(chalk.red('ERROR: ') + errorMessage);
-    console.log(separator);
-    throw new Error('Incorrect credentials configuration');
-}
-const handleProfileNotFound = (awsSecretsManagerConfig, errorMessage, strategy) => {
-    if (/Profile .*? was not found/gm.test(errorMessage)) {
-        if (strategy === 'multi' && awsSecretsManagerConfig.profile && awsSecretsManagerConfig.profile !== 'default') {
-            awsSecretsManagerConfig.profile = 'default';
-            client = undefined;
-        } else if (strategy === 'multi' && awsSecretsManagerConfig.profile === 'default') {
-            awsSecretsManagerConfig.profile = undefined;
-            client = new SecretsManagerClient({
-                region: awsSecretsManagerConfig.region,
-            });
-        } else {
-            throwException(errorMessage)
+function checkOnMandatoryKeys(objectToControl, mandatoryKeys) {
+    let missingProperties = []
+
+    mandatoryKeys.forEach(property => {
+        if (!objectToControl[property]) {
+            missingProperties.push(property);
         }
-    } else {
-        throwException(errorMessage)
+    });
+
+    if (missingProperties.length > 0) {
+        console.log(chalk.red('ConfigurationError!\n') + chalk.yellow('The object MUST contain these mandatory properties: ') + chalk.white(mandatoryKeys))
+        console.log(chalk.green('\nPassed: ') + JSON.stringify(objectToControl, null, 1))
+        console.log(chalk.red('\nMissing: ') + JSON.stringify(missingProperties, null, 1))
+        throwException('The object MUST contain these mandatory properties: ' + mandatoryKeys)
     }
-};
-
-async function getSecretsFromAws(awsSecretsManagerConfig, strategy) {
-    let count = 0;
-    const strategyTypes = ['profile', 'default', 'unset', 'multi', 'iam'];
-    let response;
-
-    while (++count <= strategyTypes.length) {
-        if (!strategyTypes.includes(strategy)) {
-            throwException('Strategy type not supported');
-        }
-        try {
-            if (strategy === 'default') {
-                awsSecretsManagerConfig.profile = 'default';
-            } else if (strategy === 'iam') {
-                if (awsSecretsManagerConfig.pathToCredentials) {
-                    const credentialsFilename = path.join(directory, awsSecretsManagerConfig.pathToCredentials)
-                    const credentials = require(credentialsFilename)
-                    const hiddenCredentials = {}
-                    Object.keys(credentials).forEach(key => {
-                        hiddenCredentials[key] = "".padStart(5, '*');
-                    });
-                    console.log('\n' + converter.toOrdinal(count) + ' attempt: Trying to login into AWS with IAM credentials.\n' + chalk.cyan('\nCredentials imported correctly: ') + chalk.white(JSON.stringify(hiddenCredentials, null, 1)));
-                    client = new SecretsManagerClient({
-                        region: awsSecretsManagerConfig.region,
-                        credentials: credentials
-                    })
-                    // deleteFile(credentialsFilename)
-                } else {
-                    throwException('Missing \'pathToCredentials\' variable in awsSecretsManagerConfig, n');
-                };
-            } else if (!client && awsSecretsManagerConfig.profile && strategy !== ('unset' && 'iam')) {
-                console.log('\n' + converter.toOrdinal(count) + ' attempt: Trying to login into AWS with profile: ' + chalk.cyan(JSON.stringify(awsSecretsManagerConfig.profile)));
-                client = new SecretsManagerClient({
-                    region: awsSecretsManagerConfig.region,
-                    credentials: fromSSO({ profile: awsSecretsManagerConfig.profile }),
-                });
-            } else {
-                console.log('\n' + converter.toOrdinal(count) + ' attempt: Trying without specifying credentials');
-                client = new SecretsManagerClient({
-                    region: awsSecretsManagerConfig.region,
-                });
-            }
-            response = await client.send(
-                new GetSecretValueCommand({
-                    SecretId: awsSecretsManagerConfig.secretName,
-                    VersionStage: "AWSCURRENT",
-                })
-            );
-
-            console.log(chalk.green('\n√ ') + 'AWS SDK credentials are set up correctly!\n');
-            console.log('Extracting secret from: ' + chalk.cyan('"AWS Secrets Manager"\n'));
-            break
-        } catch (error) {
-            handleProfileNotFound(awsSecretsManagerConfig, error.message, strategy);
-        }
-    }
-
-    if (!response) {
-        throwException('No response');
-    }
-    const secret = JSON.parse(response.SecretString);
-    return secret;
 }
 
 async function loadAwsSecrets(config, awsSecretsManagerConfig) {
@@ -139,6 +61,74 @@ async function loadAwsSecrets(config, awsSecretsManagerConfig) {
     console.log(chalk.green('\n√ ') + chalk.white('Secret loaded correctly from: ') + chalk.cyan('"' + awsSecretsManagerConfig.secretName + '"'))
 }
 
+async function getSecretsFromAws(awsSecretsManagerConfig, strategy) {
+    try {
+        switch (strategy) {
+            case 'profile':
+                setCLientWithSSO(awsSecretsManagerConfig)
+                break;
+            case 'default':
+                awsSecretsManagerConfig.profile = 'default';
+                setCLientWithSSO(awsSecretsManagerConfig)
+                break;
+            case 'iam':
+                setClientWithCredentials(awsSecretsManagerConfig)
+                break;
+            case 'unset':
+                setClientWithoutCredentials(awsSecretsManagerConfig)
+                break;
+            case 'multi':
+                return await tryMultiStrategy(awsSecretsManagerConfig, strategy)
+            default:
+                throwException('Strategy type: ' + chalk.cyan(strategy) + ' not supported');
+                errorAlreadyThrowed = true
+        }
+
+        response = await client.send(
+            new GetSecretValueCommand({
+                SecretId: awsSecretsManagerConfig.secretName,
+                VersionStage: "AWSCURRENT",
+            })
+        );
+
+        console.log(chalk.green('\n√ ') + 'AWS SDK credentials are set up correctly!\n');
+        console.log('Extracting secret from: ' + chalk.cyan('"AWS Secrets Manager"\n'));
+
+    } catch (error) {
+        if (!errorAlreadyThrowed) throwException(error)
+    }
+
+    if (errorAlreadyThrowed) {
+        throwException('Error while setting credentials. Please check the console logs for more information.', false, false);
+    }
+
+    const secret = JSON.parse(response.SecretString);
+    return secret;
+}
+
+function setClientWithCredentials(awsSecretsManagerConfig, counter = 1) {
+    if (awsSecretsManagerConfig.pathToCredentials) {
+        console.log('\n' + converter.toOrdinal(counter) + ' attempt: Trying to login into AWS with IAM configuration\n');
+        const credentialsFilename = path.join(directory, awsSecretsManagerConfig.pathToCredentials)
+        const credentials = require(credentialsFilename)
+        const hiddenCredentials = {}
+        const mandatoryCredentials = ["accessKeyId", "secretAccessKey", "sessionToken"]
+        checkOnMandatoryKeys(credentials, mandatoryCredentials)
+        Object.keys(credentials).forEach(key => {
+            hiddenCredentials[key] = "".padStart(5, '*');
+        });
+        console.log('\n' + converter.toOrdinal(counter) + ' attempt: Trying to login into AWS with IAM credentials.\n' + chalk.cyan('\nCredentials imported correctly: ') + chalk.white(JSON.stringify(hiddenCredentials, null, 1)));
+        client = new SecretsManagerClient({
+            region: awsSecretsManagerConfig.region,
+            credentials: credentials
+        })
+        // deleteFile(credentialsFilename)}
+    } else {
+        throwException('Missing \'pathToCredentials\' key in awsSecretsManagerConfig');
+        errorAlreadyThrowed = true
+    };
+}
+
 function deleteFile(path) {
     fs.unlink(path, (err) => {
         if (err) {
@@ -147,4 +137,83 @@ function deleteFile(path) {
         }
         console.log('File deleted successfully');
     });
+}
+
+function setClientWithoutCredentials(awsSecretsManagerConfig, counter = 1) {
+    console.log('\n' + converter.toOrdinal(counter) + ' attempt: Trying without specifying credentials');
+    client = new SecretsManagerClient({
+        region: awsSecretsManagerConfig.region,
+    });
+}
+
+function setCLientWithSSO(awsSecretsManagerConfig, counter = 1) {
+    if (awsSecretsManagerConfig.profile) {
+        console.log('\n' + converter.toOrdinal(counter) + ' attempt: Trying to login into AWS with profile: ' + chalk.cyan(JSON.stringify(awsSecretsManagerConfig.profile)));
+        client = new SecretsManagerClient({
+            region: awsSecretsManagerConfig.region,
+            credentials: fromSSO({ profile: awsSecretsManagerConfig.profile }),
+        });
+    } else {
+        throwException('Missing \'profile\' key in awsSecretsManagerConfig');
+        errorAlreadyThrowed = true
+    };
+}
+
+async function tryMultiStrategy(awsSecretsManagerConfig) {
+    let counter = 0 // 'multi' strategy is not counted in this while
+    let success = false
+    let endedRetries = false
+    while (counter < strategyTypes.length && !success) {
+        try {
+            client = undefined;
+            counter++
+            switch (counter) {
+                case 1:
+                    setCLientWithSSO(awsSecretsManagerConfig, counter)
+                    break;
+                case 2:
+                    awsSecretsManagerConfig.profile = 'default';
+                    setCLientWithSSO(awsSecretsManagerConfig, counter)
+                    break;
+                case 3:
+                    setClientWithCredentials(awsSecretsManagerConfig, counter)
+                    break;
+                case 4:
+                    setClientWithoutCredentials(awsSecretsManagerConfig, counter)
+                    break;
+                default:
+                    endedRetries = true
+                    throwException('All login attempts have been exhausted. Unable to log in using any supported credential strategy.');
+            }
+            response = await client.send(
+                new GetSecretValueCommand({
+                    SecretId: awsSecretsManagerConfig.secretName,
+                    VersionStage: "AWSCURRENT",
+                })
+            );
+            if (response) success = true
+
+            console.log(chalk.green('\n√ ') + 'AWS SDK credentials are set up correctly!\n');
+            console.log('Extracting secret from: ' + chalk.cyan('"AWS Secrets Manager"\n'));
+        }
+        catch (error) {
+            if (endedRetries != true) throwException(error, true, false)
+        }
+    }
+
+    const secret = JSON.parse(response.SecretString);
+    return secret
+}
+
+const throwException = (errorMessage, logInTerminal = true, throwError = true) => {
+    errorAlreadyThrowed = true
+    if (errorMessage == 'ExpiredTokenException: The security token included in the request is expired') {
+        errorMessage += ' or maybe the environment not configured correctly to use the \'unset\' strategy'
+    }
+    if (logInTerminal) {
+        console.log(chalk.red('\nIncorrect plugin configuration!'));
+        console.log(chalk.red('ERROR: ') + errorMessage);
+        console.log(separator);
+    }
+    if (throwError) throw new Error(errorMessage);
 }
