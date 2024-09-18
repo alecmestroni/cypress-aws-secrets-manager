@@ -15,8 +15,8 @@ const getSecretFromAWS = async (env, directory) => {
     const awsSecretsManagerConfig = env.awsSecretsManagerConfig ?? env.AWS_SECRET_MANAGER_CONFIG;
     const secretName = awsSecretsManagerConfig.secretName;
 
-    const saveLocally = env.AWS_SECRETS_LOCAL_DIR
-    const tempFilePath = createFilePath(env.AWS_SECRETS_LOCAL_DIR, awsSecretsManagerConfig.secretName)
+    const localDir = env.AWS_SECRETS_LOCAL_DIR ?? ''
+    const tempFilePath = createFilePath(localDir, awsSecretsManagerConfig.secretName)
 
     const jsonFilePath = path.join(directory, tempFilePath);
 
@@ -38,7 +38,7 @@ const getSecretFromAWS = async (env, directory) => {
             const secrets = await getAwsSecrets(strategy, awsSecretsManagerConfig, directory);
             env = updateEnvWithSecrets(env, secrets, secretName);
 
-            if (saveLocally) {
+            if (localDir) {
                 writeSecretsToFile(jsonFilePath, secrets)
             }
         } else {
