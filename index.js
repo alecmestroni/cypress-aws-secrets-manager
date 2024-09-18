@@ -3,27 +3,106 @@ const { fromSSO } = require("@aws-sdk/credential-providers")
 const converter = require('number-to-words')
 const chalk = require("chalk")
 const path = require('path')
+const fs = require('fs');
 
 const separator = chalk.grey('\n====================================================================================================\n')
 const strategyTypes = ['profile', 'default', 'unset', 'credentials', 'multi']
 let errorAlreadyThrew = false
 
 const getSecretFromAWS = async (env, directory) => {
-    console.log(separator)
-    console.log('Starting plugin: ' + chalk.green('cypress-aws-secrets-manager\n'))
-    if (env.awsSecretsManagerConfig) {
-        const awsSecretsManagerConfig = env.awsSecretsManagerConfig
-        const mandatoryKeys = ['secretName', 'region']
 
-        checkOnMandatoryKeys(awsSecretsManagerConfig, mandatoryKeys)
+    const strategy = env.AWS_SSO_STRATEGY ?? 'multi'
+    const awsSecretsManagerConfig = env.awsSecretsManagerConfig ?? env.AWS_SECRET_MANAGER_CONFIG;
+    const secretName = awsSecretsManagerConfig.secretName;
 
-        const newEnv = await loadAwsSecrets(env, awsSecretsManagerConfig, directory)
-        return newEnv
-    } else {
-        console.log(chalk.green('√ ') + chalk.white('Missing object:awsSecretsManagerConfig in env variables, continue without secrets!'))
-        return env
+    const saveLocally = env.AWS_SECRETS_LOCAL_DIR
+    const tempFilePath = createFilePath(env.AWS_SECRETS_LOCAL_DIR, awsSecretsManagerConfig.secretName)
+
+    const jsonFilePath = path.join(directory, tempFilePath);
+
+    console.log(separator);
+    console.log('Starting plugin: ' + chalk.green('cypress-aws-secrets-manager\n'));
+
+    try {
+        if (fs.existsSync(jsonFilePath)) {
+            console.log(`Extracting local configurations from: "${chalk.cyan(jsonFilePath)}"\n`);
+
+            const secrets = getLocalSecrets(jsonFilePath);
+            env = updateEnvWithSecrets(env, secrets, tempFilePath);
+
+        } else if (awsSecretsManagerConfig) {
+            const mandatoryKeys = ['secretName', 'region'];
+
+            checkOnMandatoryKeys(awsSecretsManagerConfig, mandatoryKeys);
+
+            const secrets = await getAwsSecrets(strategy, awsSecretsManagerConfig, directory);
+            env = updateEnvWithSecrets(env, secrets, secretName);
+
+            if (saveLocally) {
+                writeSecretsToFile(jsonFilePath, secrets)
+            }
+        } else {
+            console.log(chalk.white('⚠️  Missing object:awsSecretsManagerConfig in env variables or secret local file, continue without secrets!'));
+        }
+    } catch (err) {
+        throw new Error(`\x1B[31mx \x1B[37m⚠️  Uncaught Error loading secrets: ${err}`);
     }
-}
+    return env;
+};
+
+const createFilePath = (directory, secretName) => {
+    const arnRegex = /arn:aws:secretsmanager:[^:]+:[^:]+:secret:([^:-]+)/;
+    if (secretName.match(arnRegex)) {
+        secretName = secretName.match(arnRegex)[1];
+    }
+    const filePath = path.join(directory, secretName + '.json');
+    return filePath
+};
+
+const writeSecretsToFile = (jsonFilePath, secrets) => {
+    const directory = path.dirname(jsonFilePath);
+
+    // Check if the directory exists, if not, create it
+    if (!fs.existsSync(directory)) {
+        fs.mkdirSync(directory, { recursive: true });
+    }
+
+    // Write the secrets to the file
+    fs.writeFileSync(jsonFilePath, JSON.stringify(secrets, null, 1));
+    console.log(`\n\x1B[32m√ \x1B[37mSecrets saved locally in: "${chalk.cyan(jsonFilePath)}"`);
+};
+
+const getLocalSecrets = (jsonFilePath) => {
+    const fs = require('fs');
+    try {
+        const jsonData = fs.readFileSync(jsonFilePath, 'utf8');
+        return JSON.parse(jsonData);
+    } catch (err) {
+        throw new Error(`⚠️  \x1B[37mError reading JSON file: ${err}`);
+    }
+};
+
+const mergeSecrets = (env, secrets) => {
+    return {
+        ...env,
+        ...secrets,
+    };
+};
+
+const logSecrets = (secrets, source) => {
+    const maskedSecrets = { ...secrets };
+    Object.keys(maskedSecrets).forEach(key => {
+        maskedSecrets[key] = "".padStart(5, '*');
+    });
+    console.log(chalk.yellow("secrets: ") + `${JSON.stringify(maskedSecrets, null, 1)}"`);
+    console.log(chalk.green('\n√ ') + chalk.white('Secret loaded correctly from: ') + chalk.cyan('< ' + source + ' >'));
+};
+
+const updateEnvWithSecrets = (env, secrets, source) => {
+    env = mergeSecrets(env, secrets);
+    logSecrets(secrets, source);
+    return env;
+};
 
 function checkOnMandatoryKeys(objectToControl, mandatoryKeys) {
     const missingProperties = mandatoryKeys.filter(property => !objectToControl[property])
@@ -36,8 +115,7 @@ function checkOnMandatoryKeys(objectToControl, mandatoryKeys) {
     }
 }
 
-async function loadAwsSecrets(env, awsSecretsManagerConfig, directory) {
-    const strategy = env.AWS_SSO_STRATEGY ?? 'multi'
+async function getAwsSecrets(strategy, awsSecretsManagerConfig, directory) {
     console.log('AWS SSO strategy: ' + chalk.cyan(JSON.stringify(strategy)))
     let secret
     if (strategy == 'multi') {
@@ -45,16 +123,7 @@ async function loadAwsSecrets(env, awsSecretsManagerConfig, directory) {
     } else {
         secret = await getSecretsFromAws(awsSecretsManagerConfig, strategy, directory)
     }
-    const newEnv = {
-        ...env,
-        ...secret,
-    }
-    Object.keys(secret).forEach(key => {
-        secret[key] = "".padStart(5, '*')
-    })
-    console.log(chalk.yellow("secret: ") + `${JSON.stringify(secret, null, 1)}"`)
-    console.log(chalk.green('\n√ ') + chalk.white('Secret loaded correctly from: ') + chalk.cyan('"' + awsSecretsManagerConfig.secretName + '"'))
-    return newEnv
+    return secret
 }
 
 async function tryMultiStrategy(awsSecretsManagerConfig, directory) {
@@ -178,7 +247,7 @@ const throwException = (errorMessage, logInTerminal = true, throwError = true) =
         errorMessage += ' or maybe the environment not configured correctly to use the \'unset\' strategy'
     }
     if (logInTerminal) {
-        console.log(chalk.red('\nIncorrect plugin configuration!'))
+        console.log(chalk.red('\n⚠️  Incorrect plugin configuration!'))
         console.log(chalk.red('ERROR: ') + errorMessage)
         console.log(separator)
     }
@@ -188,6 +257,11 @@ const throwException = (errorMessage, logInTerminal = true, throwError = true) =
 async function updateSecret(env, secretValue, directory) {
     const awsSecretsManagerConfig = env.awsSecretsManagerConfig
     const secretName = awsSecretsManagerConfig.secretName
+    on('task', {
+        updateSecret(secretValue) {
+            return updateSecret(config.env, secretValue);
+        }
+    });
     try {
         if (typeof secretValue !== 'object') {
             throw new Error('secretValue deve essere un oggetto')
@@ -208,7 +282,7 @@ async function updateSecret(env, secretValue, directory) {
         console.log(chalk.green('\n√ ') + 'Secret updated successfully: ' + chalk.cyan(secretName))
         return putResponse
     } catch (error) {
-        console.error(chalk.red('Error updating secret: '), error)
+        console.error(chalk.red('⚠️  Error updating secret: '), error)
         throw error
     }
 }

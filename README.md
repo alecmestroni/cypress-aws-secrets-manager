@@ -1,8 +1,6 @@
 # Handle AWS Secrets easily with Cypress
 
-Integrate the power of AWS Secrets Manager seamlessly into your Cypress tests with the cypress-aws-secrets-manager plugin. This lightweight yet powerful plugin facilitates the secure loading of secrets stored in AWS Secrets Manager directly into your Cypress environment variables, ensuring a streamlined and secure approach to managing sensitive information in your test scripts.
-
-Additionally, it provides the capability to update secrets directly from your tests, allowing for dynamic and flexible secret management.
+Managing secrets securely and efficiently is crucial for any application. This plugin integrates AWS Secrets Manager into your Cypress tests, ensuring that sensitive data like API keys, passwords, and tokens remain secure during testing. It allows for secure loading and updating of secrets directly from your tests.
 
 <h3 align="center">
   <a href="https://www.npmjs.com/package/cypress-aws-secrets-manager">
@@ -18,21 +16,23 @@ Additionally, it provides the capability to update secrets directly from your te
 
 ## Table of Contents
 
+- [Main Changes From V1](#main-changes)
+  - [Library Import in `setupNodeEvents`](#library-import-in-setupnodeevents)
 - [Installation](#installation)
-
 - [Prerequisites](#prerequisites)
 - [Main Functions](#functions)
   - [getSecretFromAWS](#getsecretfromaws)
   - [updateSecret](#updatesecret)
 - [Global Configuration](#configuration)
   - [Code in cypress.config.js](#code-in-cypressconfigjs)
-  - [Define awsSecretsManagerConfig object](#define-awssecretsmanagerconfig-object)
+  - [Global environment variables](#global-variables)
+  - [AWS Login Strategies](#aws-login-strategies)
+  - [Define AWS_SECRET_MANAGER_CONFIG object](#define-AWS_SECRET_MANAGER_CONFIG-object)
   - [Pass your AWS configuration to cypress](#pass-your-aws-configuration-to-cypress)
+- [Importing Secrets from local file](#importing-secrets-from-a-local-file)
 - [Results](#results)
 - [Little tip for you](#little-tip-for-you)
-- [Main Changes From V1](#main-changes)
-  - [Storing `awsSecretsManagerConfig`](#storing-awssecretsmanagerconfig)
-  - [Library Import in `setupNodeEvents`](#library-import-in-setupnodeevents)
+  - [Storing `AWS_SECRET_MANAGER_CONFIG`](#storing-AWS_SECRET_MANAGER_CONFIG)
 - [THE JOB IS DONE](#the-job-is-done)
 
 ## Upgrading to Version 2
@@ -140,32 +140,22 @@ module.exports = defineConfig({
 })
 ```
 
-### Define awsSecretsManagerConfig object
+### Global Variables
 
-The awsSecretsManagerConfig is an object containing the following parameters:
+These configurations are external to the `AWS_SECRET_MANAGER_CONFIG` because they can vary for the same project when executed locally and on CI. The variables within `AWS_SECRET_MANAGER_CONFIG` are more dependent on the execution environment.
 
-```json
-{
-  "awsSecretsManagerConfig": {
-    "secretName": "AWS_SECRET_NAME",
-    "profile": "AWS_PROFILE_NAME",
-    "region": "AWS_REGION",
-    "pathToCredentials": "PATH_TO_AWS_CREDENTIALS"
-  }
-}
-```
+Global variables should be easily modifiable from the command line (see [here](#overwrite-environment-variables-when-running-on-a-different-machine-or-on-ci)), whereas the other configurations should not.
 
-| Parameter         | Mandatory | Notes                                                                               | Deafult                            |
-| ----------------- | --------- | ----------------------------------------------------------------------------------- | ---------------------------------- |
-| secretName        | TRUE      | AWS secret name                                                                     | \                                  |
-| region            | TRUE      | AWS Secrets Manager region                                                          | \                                  |
-| profile           | FALSE     | AWS SSO profile name                                                                | 'default' profile                  |
-| pathToCredentials | FALSE     | path to credentials file, used with 'credentials' if u want to write them in a file | Same folder as "cypress.config.js" |
+| Parameter                 | Mandatory | Notes                                                                                                                                                                  | Default |
+| ------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| AWS_SSO_STRATEGY          | TRUE      | A string that defines the AWS login strategy (see [here](#aws-login-strategies) for more details)                                                                      | \       |
+| AWS_SECRET_MANAGER_CONFIG | TRUE      | An object that contains the essential configuration parameters (see [here](#define-aws_secret_manager_config-object) for more details)                                 | \       |
+| AWS_SECRETS_LOCAL_DIR     | FALSE     | Directory path where secrets should be saved locally . If not specified, secrets will not be saved (see [here](#importing-secrets-from-a-local-file) for more details) | \       |
 
-#### Define AWS login strategy
+### AWS login strategies
 
+- If `profile` will use the profile name specified inside the AWS_SECRET_MANAGER_CONFIG (If the profile is not specified, the default profile will be used).
 - **AWS_SSO_STRATEGY**: `'profile'|'default'|'credentials'|'unset'|'multi'`
-  - If `profile` will use the profile name specified inside the awsSecretsManagerConfig (If the profile is not specified, the default profile will be used).
   - If `default` will use the default sso config.
   - If `credentials` will log with aws credentials, need **access_key**, **secret_key** and **session_token** specified in a pathToCredential variable.
   - If `unset` will log with aws credentials, need **access_key**, **secret_key** and **session_token** as environment variable.
@@ -179,9 +169,32 @@ The awsSecretsManagerConfig is an object containing the following parameters:
 | unset            | AWS IAM                                             |
 | multi            | If not specified the 'multi' strategy will be used. |
 
+### Define AWS_SECRET_MANAGER_CONFIG object
+
+The AWS_SECRET_MANAGER_CONFIG is an object containing the following parameters:
+
+```json
+{
+  "AWS_SECRET_MANAGER_CONFIG": {
+    "secretName": "AWS_SECRET_NAME",
+    "profile": "AWS_PROFILE_NAME",
+    "region": "AWS_REGION",
+    "pathToCredentials": "PATH_TO_AWS_CREDENTIALS.JSON"
+  }
+}
+```
+
+| Parameter         | Mandatory | Notes                                                                               | Default                            |
+| ----------------- | --------- | ----------------------------------------------------------------------------------- | ---------------------------------- |
+| secretName        | TRUE      | AWS secret name                                                                     | \                                  |
+| region            | TRUE      | AWS Secrets Manager region                                                          | \                                  |
+| profile           | FALSE     | AWS SSO profile name                                                                | 'default' profile                  |
+| pathToCredentials | FALSE     | path to credentials file, used with 'credentials' if u want to write them in a file | Same folder as "cypress.config.js" |
+|                   |
+
 #### Credential File example:
 
-This Credential File is used with the AWS IAM strategy. This file is optional and is one of the two configurations that can be used.
+This credential file is used with the AWS IAM strategy. It is optional.
 
 ```json
 //pathToCredentials.json
@@ -194,7 +207,8 @@ This Credential File is used with the AWS IAM strategy. This file is optional an
 
 ## Pass your AWS configuration to cypress
 
-After defining your strategy and your awsSecretsManagerConfig.  
+After defining your strategy and your AWS_SECRET_MANAGER_CONFIG.
+
 I propose two solutions for you to import this configuration into cypress, it's up to you to decide which one to choose
 
 ### "Easy" way with [cypress-env](https://www.npmjs.com/package/cypress-env) plugin:
@@ -216,22 +230,22 @@ Following the plugin's guide, you should end up with a JSON file, which must res
 }
 ```
 
-Simply add **"AWS_SSO_STRATEGY"** and **awsSecretsManagerConfig** inside the "env" object as follows:
+Simply add **"AWS_SSO_STRATEGY"** and **AWS_SECRET_MANAGER_CONFIG** inside the "env" object as follows:
 
 ```json
 //environment.json
 {
   "baseUrl": "https://www.google.com",
   "env": {
-    "AWS_SSO_STRATEGY": "strategy_type",
     "var1": "value1",
     "var2": "value2",
     "var3": "value3",
-    "awsSecretsManagerConfig": {
+    "AWS_SSO_STRATEGY": "strategy_type",
+    "AWS_SECRET_MANAGER_CONFIG": {
       "secretName": "AWS_SECRET_NAME",
       "profile": "AWS_PROFILE_NAME",
       "region": "AWS_REGION",
-      "pathToCredentials": "PATH_TO_AWS_CREDENTIALS"
+      "pathToCredentials": "PATH_TO_AWS_CREDENTIALS.JSON"
     }
   }
 }
@@ -249,31 +263,60 @@ Simply add **"AWS_SSO_STRATEGY"** and **awsSecretsManagerConfig** inside the "en
 module.exports = defineConfig({
   e2e: {
     async setupNodeEvents(on, config, __dirname) {
-
       const { getSecretFromAWS, updateSecret } = require('cypress-aws-secrets-manager')
-      .env = await getSecretFromAWS(config.env, __dirname)
+      config.env = await getSecretFromAWS(config.env, __dirname)
       return config
     }
   },
   env: {
-    AWS_SSO_STRATEGY: 'strategy_type'
-    awsSecretsManagerConfig: {
-          secretName: 'AWS_SECRET_NAME',
-          profile: 'AWS_PROFILE_NAME',
-          region: 'AWS_REGION',
-          pathToCredentials: 'PATH_TO_AWS_CREDENTIALS.JSON'
+    AWS_SSO_STRATEGY: 'strategy_type',
+    AWS_SECRET_MANAGER_CONFIG: {
+      secretName: 'AWS_SECRET_NAME',
+      profile: 'AWS_PROFILE_NAME',
+      region: 'AWS_REGION',
+      pathToCredentials: 'PATH_TO_AWS_CREDENTIALS.JSON'
     }
   }
 })
 ```
 
-## Overwrite AWS_SSO_STRATEGY property when running on a different machine or on CI
+## Importing Secrets from a Local File
 
-Sometimes you'll need to override the AWS_SSO_STRATEGY property that was provided inside cypress.config.env.  
+I understand that allowing users to load secrets from a local file might seem counterintuitive. However, this approach becomes necessary especially when using a cloud provider like AWS, in scenarios involving assume-role chains that are limited to an hour in duration.
+
+When conducting sequential tests, particularly with tools like Cypress that restart and reload environment variables for each new session, obtaining AWS secrets after the initial hour can be cumbersome. This can interrupt testing workflows, especially when secrets are needed across multiple sessions.
+To mitigate this issue, I’ve added the option for users to specify a **AWS_SECRETS_LOCAL_DIR** variable.
+
+If **AWS_SECRETS_LOCAL_DIR** is specified and the temporary file doesn't exist, the plugin will retrieve the secrets during the first session and store them locally. These stored secrets will then be reused in subsequent sessions, eliminating the need to continuously fetch them from AWS after the role chain expires.Every secrets will be saved in a JSON file named by the secret name.
+
+This solution simplifies running multiple test sequences without worrying about refreshing the role or secret access within the limited session time frame.
+
+See [here](#overwrite-environment-variables-when-running-on-a-different-machine-or-on-ci) to understand how to use different behavior on CI.
+
+```json
+//environment.json
+{
+  "baseUrl": "https://www.google.com",
+  "env": {
+    "AWS_SSO_STRATEGY": "strategy_type",
+    "AWS_SECRETS_LOCAL_DIR": "aws_secrets_folder",
+    "AWS_SECRET_MANAGER_CONFIG": {
+      "secretName": "AWS_SECRET_NAME",
+      "profile": "AWS_PROFILE_NAME",
+      "region": "AWS_REGION",
+      "pathToCredentials": "PATH_TO_AWS_CREDENTIALS.JSON"
+    }
+  }
+}
+```
+
+## Overwrite Environment Variables when running on a different machine or on CI
+
+Sometimes you'll need to override the AWS_SSO_STRATEGY & AWS_SECRETS_LOCAL_DIR property that was provided inside cypress.config.env.  
 To do so, you'll need to run cypress with the following command:
 
 ```shell
-npx cypress run -e AWS_SSO_STRATEGY=$OVERWRITING_AWS_SSO_STRATEGY
+npx cypress run -e AWS_SSO_STRATEGY=$OVERWRITING_AWS_SSO_STRATEGY,AWS_SECRETS_LOCAL_DIR=$FOLDER_TO_SAVE_SECRETS_LOCALLY
 ```
 
 Where **$OVERWRITING_AWS_SSO_STRATEGY** is the new strategy value.
@@ -314,8 +357,8 @@ Cypress has starter without plugin configurations
 ====================================================================================================
 
 Starting plugin: cypress-aws-secrets-manager
+√ Missing AWS_SECRET_MANAGER_CONFIG, continue without secrets!
 
-√ Missing awsSecretsManagerConfig, continue without secrets!
 
 ====================================================================================================
 ```
@@ -330,12 +373,12 @@ Properties: secretName & region are mandatory
 
 Starting plugin: cypress-aws-secrets-manager
 
+"AWS_SECRET_MANAGER_CONFIG" object MUST contains these mandatory properties: secretName,region
 ConfigurationError!
-"awsSecretsManagerConfig" object MUST contains these mandatory properties: secretName,region
 
-Passed: {
+Passed: [
  "profile": "AWS_PROFILE_NAME"
-}
+]
 Missing: [
  "secretName",
  "region"
@@ -416,9 +459,9 @@ npm run cy:open
 
 ### Main Changes from V1
 
-#### Storing `awsSecretsManagerConfig`
+#### Storing `AWS_SECRET_MANAGER_CONFIG`
 
-The `awsSecretsManagerConfig` should now be stored as a Cypress environment variable inside `config.env` and no longer directly in `config`.
+The `AWS_SECRET_MANAGER_CONFIG` should now be stored as a Cypress environment variable inside `config.env` instead of directly in `config`. Additionally, its name has changed from `awsSecretManagerConfig` to `AWS_SECRET_MANAGER_CONFIG` (although `awsSecretManagerConfig` is still valid).
 
 #### Library Import in `setupNodeEvents`
 
