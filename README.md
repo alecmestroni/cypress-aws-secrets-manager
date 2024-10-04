@@ -18,6 +18,7 @@ Managing secrets securely and efficiently is crucial for any application. This p
 
 - [Main Changes From V1](#main-changes)
   - [Library Import in `setupNodeEvents`](#library-import-in-setupnodeevents)
+  - [Storing `AWS_SECRET_MANAGER_CONFIG`](#storing-AWS_SECRET_MANAGER_CONFIG)
 - [Installation](#installation)
 - [Prerequisites](#prerequisites)
 - [Main Functions](#functions)
@@ -29,10 +30,13 @@ Managing secrets securely and efficiently is crucial for any application. This p
   - [AWS Login Strategies](#aws-login-strategies)
   - [Define AWS_SECRET_MANAGER_CONFIG object](#define-AWS_SECRET_MANAGER_CONFIG-object)
   - [Pass your AWS configuration to cypress](#pass-your-aws-configuration-to-cypress)
-- [Importing Secrets from local file](#importing-secrets-from-a-local-file)
+- [Running on CI](#running-on-ci)
+  - [Overwriting variables](#overriding-environment-variables-in-ci-or-local-setup)
+  - [Importing Secrets from local file](#importing-secrets-from-a-local-file)
 - [Results](#results)
-- [Little tip for you](#little-tip-for-you)
-  - [Storing `AWS_SECRET_MANAGER_CONFIG`](#storing-AWS_SECRET_MANAGER_CONFIG)
+- [Best Practices for AWS Login](#best-practices-for-aws-login)
+  - [AWS SSO](#aws-sso-single-sign-on)
+  - [AWS IAM](#aws-iam-assume-role)
 - [THE JOB IS DONE](#the-job-is-done)
 
 ## Upgrading to Version 2
@@ -60,6 +64,10 @@ $ npm install -g cypress-aws-secrets-manager
 
 ### getSecretFromAWS
 
+```javascript
+getSecretFromAWS(config.env, __dirname)
+```
+
 The `getSecretFromAWS` function allows you to update your environment variables by adding secrets stored in AWS Secrets Manager. This function merges existing environment variables with new secrets from AWS Secrets Manager.
 
 #### getSecretFromAWS Usage
@@ -69,7 +77,7 @@ The `getSecretFromAWS` function allows you to update your environment variables 
 module.exports = defineConfig({
   e2e: {
     async setupNodeEvents(on, config, __dirname) {
-      const { getSecretFromAWS, updateSecret } = require('cypress-aws-secrets-manager')
+      const { getSecretFromAWS } = require('cypress-aws-secrets-manager')
       config.env = await getSecretFromAWS(config.env, __dirname)
       return config
     }
@@ -79,7 +87,22 @@ module.exports = defineConfig({
 
 ### updateSecret
 
-The `updateSecret` function allows you to update secrets stored in AWS Secrets Manager. This function merges existing secrets with new values and updates the secret in AWS Secrets Manager.
+```javascript
+cy.task('updateSecret', secretValue)
+```
+
+The `updateSecret` tasks allows you to update secrets stored in AWS Secrets Manager. This function merges existing secrets with new values and updates the secret in AWS Secrets Manager. See results here
+
+**Features**
+
+- **Adding Secrets**: Introduce a new key-value pair (e.g., [here](#adding-secrets-example))
+- **Updating Secrets**: Change the value of an existing key (e.g., [here](#updating-secrets-example)).
+
+**secretValue**
+Must be an object containing the new secretString for the secretKey to update & to merge with the existing ones.
+
+**Returns**:
+A promise that resolves with the AWS Secrets Manager response if the secret is updated successfully, or rejects with an error if the update fails
 
 #### updateSecret Usage
 
@@ -88,33 +111,19 @@ The `updateSecret` function allows you to update secrets stored in AWS Secrets M
 module.exports = defineConfig({
   e2e: {
     async setupNodeEvents(on, config, __dirname) {
-      const { getSecretFromAWS, updateSecret } = require('cypress-aws-secrets-manager')
-      on('task', {
-        updateSecret(secretValue) {
-          return updateSecret(config.env, secretValue)
-        }
-      })
+      const { getSecretFromAWS } = require('cypress-aws-secrets-manager')
+      require('cypress-aws-secrets-manager/tasks')(on, config)
       return config
     }
   }
 })
 
-//spec.cy.js
-describe('testSuite', () => {
-  it('testCase 1.1', () => {
-    const secretValue = { secretKey: 'secretString' }
-    cy.task('updateSecret', secretValue).then((result) => {
-      cy.log(JSON.stringify(result))
-    })
-  })
+//spec.cy.js inside an it(..)
+const secretValue = { secretKey: 'secretString' }
+cy.task('updateSecret', secretValue).then((result) => {
+  cy.log(JSON.stringify(result))
 })
 ```
-
-**secretValue**: An object containing the new secretString for the secretKey to update & to merge with the existing ones.
-
-#### Returns
-
-A promise that resolves with the AWS Secrets Manager response if the secret is updated successfully, or rejects with an error if the update fails
 
 ## Global Configuration
 
@@ -127,13 +136,9 @@ In your cypress.config.js file:
 module.exports = defineConfig({
   e2e: {
     async setupNodeEvents(on, config, __dirname) {
-      const { getSecretFromAWS, updateSecret } = require('cypress-aws-secrets-manager')
+      const { getSecretFromAWS } = require('cypress-aws-secrets-manager')
       config.env = await getSecretFromAWS(config.env, __dirname)
-      on('task', {
-        updateSecret(secretValue) {
-          return updateSecret(config.env, secretValue)
-        }
-      })
+      require('cypress-aws-secrets-manager/tasks')(on, config)
       return config
     }
   }
@@ -146,11 +151,11 @@ These configurations are external to the `AWS_SECRET_MANAGER_CONFIG` because the
 
 Global variables should be easily modifiable from the command line (see [here](#overwrite-environment-variables-when-running-on-a-different-machine-or-on-ci)), whereas the other configurations should not.
 
-| Parameter                 | Mandatory | Notes                                                                                                                                                                  | Default |
-| ------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| AWS_SSO_STRATEGY          | TRUE      | A string that defines the AWS login strategy (see [here](#aws-login-strategies) for more details)                                                                      | \       |
-| AWS_SECRET_MANAGER_CONFIG | TRUE      | An object that contains the essential configuration parameters (see [here](#define-aws_secret_manager_config-object) for more details)                                 | \       |
-| AWS_SECRETS_LOCAL_DIR     | FALSE     | Directory path where secrets should be saved locally . If not specified, secrets will not be saved (see [here](#importing-secrets-from-a-local-file) for more details) | \       |
+| Parameter | Mandatory | Notes | Default |
+| - | | - | - |
+| AWS_SSO_STRATEGY | TRUE | A string that defines the AWS login strategy (see [here](#aws-login-strategies) for more details) | \ |
+| AWS_SECRET_MANAGER_CONFIG | TRUE | An object that contains the essential configuration parameters (see [here](#define-aws_secret_manager_config-object) for more details) | \ |
+| AWS_SECRETS_LOCAL_DIR | FALSE | Directory path where secrets should be saved locally . If not specified, secrets will not be saved (see [here](#importing-secrets-from-a-local-file) for more details) | \ |
 
 ### AWS login strategies
 
@@ -161,13 +166,13 @@ Global variables should be easily modifiable from the command line (see [here](#
   - If `unset` will log with aws credentials, need **access_key**, **secret_key** and **session_token** as environment variable.
   - If `multi` will try with every strategy, fails only after trying them all.
 
-| AWS_SSO_STRATEGY | AWS Auth Type                                       |
-| ---------------- | --------------------------------------------------- |
-| profile          | AWS SSO                                             |
-| default          | AWS SSO                                             |
-| credentials      | AWS IAM                                             |
-| unset            | AWS IAM                                             |
-| multi            | If not specified the 'multi' strategy will be used. |
+| AWS_SSO_STRATEGY | AWS Auth Type |
+| - | |
+| profile | AWS SSO |
+| default | AWS SSO |
+| credentials | AWS IAM |
+| unset | AWS IAM |
+| multi | If not specified the 'multi' strategy will be used. |
 
 ### Define AWS_SECRET_MANAGER_CONFIG object
 
@@ -184,13 +189,13 @@ The AWS_SECRET_MANAGER_CONFIG is an object containing the following parameters:
 }
 ```
 
-| Parameter         | Mandatory | Notes                                                                               | Default                            |
-| ----------------- | --------- | ----------------------------------------------------------------------------------- | ---------------------------------- |
-| secretName        | TRUE      | AWS secret name                                                                     | \                                  |
-| region            | TRUE      | AWS Secrets Manager region                                                          | \                                  |
-| profile           | FALSE     | AWS SSO profile name                                                                | 'default' profile                  |
-| pathToCredentials | FALSE     | path to credentials file, used with 'credentials' if u want to write them in a file | Same folder as "cypress.config.js" |
-|                   |
+| Parameter | Mandatory | Notes | Default |
+| -- | | -- | - |
+| secretName | TRUE | AWS secret name | \ |
+| region | TRUE | AWS Secrets Manager region | \ |
+| profile | FALSE | AWS SSO profile name | 'default' profile |
+| pathToCredentials | FALSE | path to credentials file, used with 'credentials' if u want to write them in a file | Same folder as "cypress.config.js" |
+| |
 
 #### Credential File example:
 
@@ -263,7 +268,7 @@ Simply add **"AWS_SSO_STRATEGY"** and **AWS_SECRET_MANAGER_CONFIG** inside the "
 module.exports = defineConfig({
   e2e: {
     async setupNodeEvents(on, config, __dirname) {
-      const { getSecretFromAWS, updateSecret } = require('cypress-aws-secrets-manager')
+      const { getSecretFromAWS } = require('cypress-aws-secrets-manager')
       config.env = await getSecretFromAWS(config.env, __dirname)
       return config
     }
@@ -280,7 +285,24 @@ module.exports = defineConfig({
 })
 ```
 
-## Importing Secrets from a Local File
+## Running on CI
+
+### Overriding Environment Variables in CI or Local Setup
+
+In certain cases, you may need to override specific environment variables like `AWS_SSO_STRATEGY` or `AWS_SECRETS_LOCAL_DIR` that are pre-configured in your `cypress.config.env`. This is particularly useful when running tests in different environments (e.g., local development vs CI) where different AWS configurations are required.
+
+To override these variables when running Cypress, use the following command:
+
+```shell
+npx cypress run -e AWS_SSO_STRATEGY=$NEW_AWS_SSO_STRATEGY,AWS_SECRETS_LOCAL_DIR=$CUSTOM_SECRETS_DIR
+```
+
+- **$NEW_AWS_SSO_STRATEGY**: The new value for the AWS SSO strategy that overrides the default strategy configured in your project.
+- **$CUSTOM_SECRETS_DIR**: The directory where you want to store or retrieve AWS secrets locally for reuse across multiple test sessions.
+
+This allows for flexible configuration across different environments, ensuring that secrets and authentication strategies are handled correctly depending on where the tests are executed (e.g., in a CI pipeline or on a developer's machine).
+
+### Importing Secrets from a Local File
 
 I understand that allowing users to load secrets from a local file might seem counterintuitive. However, this approach becomes necessary especially when using a cloud provider like AWS, in scenarios involving assume-role chains that are limited to an hour in duration.
 
@@ -309,17 +331,6 @@ See [here](#overwrite-environment-variables-when-running-on-a-different-machine-
   }
 }
 ```
-
-## Overwrite Environment Variables when running on a different machine or on CI
-
-Sometimes you'll need to override the AWS_SSO_STRATEGY & AWS_SECRETS_LOCAL_DIR property that was provided inside cypress.config.env.  
-To do so, you'll need to run cypress with the following command:
-
-```shell
-npx cypress run -e AWS_SSO_STRATEGY=$OVERWRITING_AWS_SSO_STRATEGY,AWS_SECRETS_LOCAL_DIR=$FOLDER_TO_SAVE_SECRETS_LOCALLY
-```
-
-Where **$OVERWRITING_AWS_SSO_STRATEGY** is the new strategy value.
 
 ## Results
 
@@ -411,47 +422,123 @@ ERROR: Could not load credentials from any providers
 ====================================================================================================
 ```
 
-## Little tip for you
+### Adding Secrets Example
 
-You can create a bash file that verifies if you are already logged into the AWS account:  
-**NB Change AWS_PROFILE & AWS_USER with your data**
-
-```bash
-#awslogin_script.sh
-#!/bin/bash
-AWS_PROFILE='your_profile'
-AWS_USER="your_aws_user_number"
-
-# Check to see if we are already logged in
-ACCOUNT_ID_TEMP=$(aws sts get-caller-identity --query "Account" --profile $AWS_PROFILE | tr -d '"')
-
-# If response is "533223568588" we are already logged in
-if [ "$ACCOUNT_ID_TEMP" = "$AWS_USER" ]; then
-    echo "AWS SSO session still valid, no login needed"
-
-# Else we login with "aws sso login"
-else
-    echo ""
-    echo "AWS SSO session expired, login needed"
-    echo ""
-    aws sso login --profile onboarding-noprod
-
-fi
-```
-
-Then in your package.json file create a script like this:
+**Initial Secret on AWS**:
 
 ```json
-//package.json
+{
+  "dbUsername": "admin",
+  "apiKey": "someAPIKey"
+}
+```
+
+**Cypress Test**:
+
+```javascript
+// spec.cy.js
+describe('Adding Secrets', () => {
+  it('should add a new dbPassword', () => {
+    cy.task('updateSecret', { dbPassword: 'oldSecurePassword456!' })
+  })
+})
+```
+
+**Resulting Secret**:
+
+```json
+{
+  "dbUsername": "admin",
+  "dbPassword": "oldSecurePassword456!",
+  "apiKey": "someAPIKey"
+}
+```
+
+---
+
+### Updating Secrets Example
+
+**Current Secret on AWS**:
+
+```json
+{
+  "dbUsername": "admin",
+  "dbPassword": "oldSecurePassword456!",
+  "apiKey": "someAPIKey"
+}
+```
+
+**Cypress Test**:
+
+```javascript
+// spec.cy.js
+describe('Updating Secrets', () => {
+  it('should update the dbPassword', () => {
+    cy.task('updateSecret', { dbPassword: 'newSecurePassword456!' })
+  })
+})
+```
+
+**Resulting Secret**:
+
+```json
+{
+  "dbUsername": "admin",
+  "dbPassword": "newSecurePassword456!",
+  "apiKey": "someAPIKey"
+}
+```
+
+Certainly! Here’s an expanded version of your context that provides more details and clarifies the best practices for logging into AWS using SSO or assume role, along with instructions on setting up the scripts in your `package.json`.
+
+---
+
+## Best Practices for AWS Login
+
+When working with AWS, particularly in environments like development and testing, it's essential to ensure that you have authenticated access to your AWS account. Below are some best practices for managing AWS logins effectively, using either AWS SSO or Assume Role methods.
+
+**Note**: **Make sure to add your specific credentials and configuration inside `aws_authenticate.sh`.**
+
+### AWS SSO (Single Sign-On)
+
+If your organization uses AWS SSO, you can utilize the following scripts to handle authentication seamlessly:
+
+- [**aws_authenticate.sh**](https://raw.githubusercontent.com/alecmestroni/cypress-aws-secrets-manager/main/sh/sso/aws_authenticate.sh)  
+  This set the needed environment variables and starts the aws_sso.sh script
+
+- [**aws_sso.sh**](https://raw.githubusercontent.com/alecmestroni/cypress-aws-secrets-manager/main/sh/sso/aws_sso.sh)  
+  This script checks your AWS SSO authentication status and logs you in if you're not already.
+
+### AWS IAM (Assume Role)
+
+For users and applications that need to assume roles to access specific AWS resources, the following scripts can be beneficial:
+
+- [**aws_authenticate.sh**](https://raw.githubusercontent.com/alecmestroni/cypress-aws-secrets-manager/main/sh/assume_role/aws_authenticate.sh)  
+  This set the needed environment variables and starts the aws_sso.sh script
+
+- [**aws_assume_role.sh**](https://raw.githubusercontent.com/alecmestroni/cypress-aws-secrets-manager/main/sh/assume_role/aws_assume_role.sh)  
+  This version of the script is designed for verifying your role assumption and logging you in if you're not already.
+
+### Integrating with `package.json`
+
+To streamline your workflow, you can create scripts in your `package.json` file that automate the login and application startup processes. Here’s how to do it:
+
+1. Open your `package.json` file.
+2. Add the following scripts:
+
+```json
+// package.json
 {
   "scripts": {
-    "cy:open": "sh awslogin_script.sh && npx cypress open",
-    "cy:run": "sh awslogin_script.sh && npx cypress run"
+    "cy:open": "sh aws_authenticate $ENV \"npx cypress open\"",
+    "cy:run": "sh aws_authenticate $ENV \"npx cypress run\""
   }
 }
 ```
 
-So you'll only have to type this command to open cypress and login into aws:
+### Running Your Scripts
+
+With the scripts in place, you can easily open Cypress and authenticate with AWS in one command. To do this, simply run:
 
 ```bash
 npm run cy:open
@@ -468,7 +555,7 @@ The `AWS_SECRET_MANAGER_CONFIG` should now be stored as a Cypress environment va
 The library should now be imported and used as follows:
 
 ```javascript
-const { getSecretFromAWS, updateSecret } = require('cypress-aws-secrets-manager')
+const { getSecretFromAWS } = require('cypress-aws-secrets-manager')
 config.env = await getSecretFromAWS(config.env, __dirname)
 ```
 
