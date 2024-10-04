@@ -297,8 +297,7 @@ function prerequisites {
 
 # Function to set AWS user identifier file
 function set_aws_user_identifier_file {
-    echo "$(dirname "${BASH_SOURCE[0]}")"
-    AWS_USER_ID_FILE_PATH="$(dirname "${BASH_SOURCE[0]}")/$AWS_USER_ID_FILE_NAME"
+    AWS_USER_ID_FILE_PATH="$DIR/$AWS_USER_ID_FILE_NAME"
     if [ ! -r $AWS_USER_ID_FILE_PATH ]; then
         mkdir -p $(dirname "$AWS_USER_ID_FILE_PATH") && touch "$AWS_USER_ID_FILE_PATH"
     fi
