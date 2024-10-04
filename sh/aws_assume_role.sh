@@ -15,10 +15,12 @@
 # - AWS_USER_ID_FILE_NAME: The name of the file that stores the AWS user ID.
 # - USER_IDENTIFIER_PREFIX: A prefix used for identifying users.
 
+ENV=$(echo "$1" | tr '[:lower:]' '[:upper:]')
+
 # Function to check if all required variables are defined
 function check_required_variables {
     # Array of required variables
-    required_vars=("ROLE_NAME" "AWS_PROFILE_${1^^}" "ACCOUNT_ID_${1^^}" "AWS_USER_ID_FILE_NAME" "USER_IDENTIFIER_PREFIX")
+    required_vars=("ROLE_NAME" "AWS_PROFILE_$ENV" "ACCOUNT_ID_$ENV" "AWS_USER_ID_FILE_NAME" "USER_IDENTIFIER_PREFIX")
 
     for var in "${required_vars[@]}"; do
         if [[ -z "${!var}" ]]; then
