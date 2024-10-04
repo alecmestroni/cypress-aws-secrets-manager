@@ -5,46 +5,48 @@
 # properly configured within the script before running it.
 #
 # If the provided argument does not match any supported environments, an error
-# message will be printed and the script will exit with status 1. If the argument
-# is valid, the script will return 0.
+# message will be printed and the script will exit with status 1.
 #
 # Required environment variables:
 # - ROLE_NAME: The username for DevOps-related tasks.
 # - AWS_PROFILE_<environment>: The AWS CLI profile for the specified environment.
 # - ACCOUNT_ID_<environment>: The AWS account ID for the specified environment.
 # - AWS_USER_ID_FILE_NAME: The name of the file that stores the AWS user ID.
-# - USER_IDENTIFIER_PREFIX: A prefix used for identifying users.
+# - USER_IDENTIFIER_PREFIX: A prefix used for identifying users (only one is needed).
+# - USER_IDENTIFIER_SUFFIX: A suffix used for identifying users (only one is needed).
 
 ENV=$(echo "$1" | tr '[:lower:]' '[:upper:]')
 
-# Function to check if all required variables are defined
 function check_required_variables {
     # Array of required variables
-    required_vars=("ROLE_NAME" "AWS_PROFILE_$ENV" "ACCOUNT_ID_$ENV" "AWS_USER_ID_FILE_NAME" "USER_IDENTIFIER_PREFIX")
+    required_vars=("ROLE_NAME" "AWS_PROFILE_$ENV" "ACCOUNT_ID_$ENV" "AWS_USER_ID_FILE_NAME")
 
+    # Check if all required variables are defined
     for var in "${required_vars[@]}"; do
         if [[ -z "${!var}" ]]; then
-            printf "Error: The required variable '%s' is not defined. Please ensure it is present in config.sh\n" "$var"
+            printf "Error: The required variable '%s' is not defined. Please ensure it is present in aws_authenticate.sh\n" "$var"
             return 1
         fi
     done
-    return 0
+
+    # Check that exactly one of USER_IDENTIFIER_PREFIX or USER_IDENTIFIER_SUFFIX is set
+    if [[ -n "$USER_IDENTIFIER_PREFIX" && -n "$USER_IDENTIFIER_SUFFIX" ]]; then
+        printf "Error: Both USER_IDENTIFIER_PREFIX and USER_IDENTIFIER_SUFFIX are defined. Please ensure only one is set.\n"
+        return 1
+    elif [[ -z "$USER_IDENTIFIER_PREFIX" && -z "$USER_IDENTIFIER_SUFFIX" ]]; then
+        printf "Error: Neither USER_IDENTIFIER_PREFIX nor USER_IDENTIFIER_SUFFIX is defined. Please define one of them.\n"
+        return 1
+    fi
+
+    # Assign one of the identifiers to USER_IDENTIFIER
+    USER_IDENTIFIER="${USER_IDENTIFIER_PREFIX:-$USER_IDENTIFIER_SUFFIX}"
 }
 
 # Function to set the environment variables based on the input argument
 function set_environment {
-    # Check if the input argument is 'test' or 'stage ||' and set the AWS_PROFILE and ACCOUNT_ID accordingly
-    if [[ $1 == 'test' ]]; then
-        AWS_PROFILE=$AWS_PROFILE_TEST
-        ACCOUNT_ID=$ACCOUNT_ID_TEST
-    elif [[ $1 == 'stage' || $1 == 'local' ]]; then
-        AWS_PROFILE=$AWS_PROFILE_STAGE
-        ACCOUNT_ID=$ACCOUNT_ID_STAGE
-    else
-        # If the input argument is neither 'test' nor 'stage', print an error message and return 1
-        printf 'AWS SCRIPT: Missing required argument ENVIRONMENT\n'
-        return 1
-    fi
+    AWS_PROFILE=$(eval echo "\$AWS_PROFILE_${ENV}")
+    ACCOUNT_ID=$(eval echo "\$ACCOUNT_ID_${ENV}")
+
     return 0
 }
 
@@ -322,23 +324,23 @@ function read_session_user {
 function prompt_for_session_user {
     # Loop for maximum 5 tries
     for ((tries = 1; tries <= 5; tries++)); do
-        printf "\nPlease enter your identifier (${USER_IDENTIFIER_PREFIX[*]})\n"
+        printf "\nPlease enter your identifier (${USER_IDENTIFIER[*]})\n"
         read -r identifier
 
         # Convert identifier to lowercase for case-insensitive matching
         lower_identifier=$(echo "$identifier" | tr '[:upper:]' '[:lower:]')
 
-        # Check if the identifier starts with a valid prefix
+        # Check if the identifier starts with a valid id
         is_valid=false
-        for prefix in "${USER_IDENTIFIER_PREFIX[@]}"; do
-            if [[ $lower_identifier =~ ^$prefix ]]; then
+        for id in "${USER_IDENTIFIER[@]}"; do
+            if [[ $lower_identifier =~ $id ]]; then
                 is_valid=true
                 break
             fi
         done
 
         if [[ $is_valid == false ]]; then
-            printf "Identifier is not valid. It must start with one of: ${USER_IDENTIFIER_PREFIX[*]}.\n"
+            printf "Identifier is not valid. It must start with one of: ${USER_IDENTIFIER[*]}.\n"
             if ((tries == 5)); then
                 printf "Maximum number of tries reached. Exiting...\n"
                 return 1
@@ -353,8 +355,18 @@ function prompt_for_session_user {
 
 # Function to validate session user
 function validate_session_user {
-    # Check if SESSION_USER starts with 'yyi' or 'yye'
-    if [[ ! $SESSION_USER =~ ^[Yy]{2}[IEie] ]]; then
+    # Validate SESSION_USER against USER_IDENTIFIER_PREFIX
+    local lower_session_user=$(echo "$SESSION_USER" | tr '[:upper:]' '[:lower:]')
+    local is_valid=false
+
+    for prefix in "${USER_IDENTIFIER_PREFIX[@]}"; do
+        if [[ $lower_session_user =~ ^$prefix ]]; then
+            is_valid=true
+            break
+        fi
+    done
+
+    if [[ $is_valid == false ]]; then
         return 1
     fi
 }
@@ -362,17 +374,13 @@ function validate_session_user {
 # Function to set session user
 function set_session_user {
     read_session_user
-    # Check if SESSION_USER is not already setted correctly
-    if [[ ! $SESSION_USER =~ ^[Yy]{2}[IEie] ]]; then
+    # Check if SESSION_USER is not already set correctly
+    if [[ -z "$SESSION_USER" ]] || ! validate_session_user; then
         if ! prompt_for_session_user; then
             return 1
         fi
     fi
-    if ! validate_session_user; then
-        return 1
-    else
-        printf "\nINFO: Detected user $SESSION_USER\n"
-    fi
+    printf "\nINFO: Detected user $SESSION_USER\n"
     return 0
 }
 
@@ -591,8 +599,7 @@ function assume_role_and_save_credentials {
     AWS_STS_OUTPUT=$(AWS_PROFILE="$AWS_PROFILE" aws sts assume-role --role-arn arn:aws:iam::"$ACCOUNT_ID":role/$ROLE_NAME --role-session-name $SESSION_USER)
     # Check if the assume-role command was successful
     if [ $? -ne 0 ]; then
-        printf "Error assuming role. Exiting...\n"
-        return
+        return 1
     fi
     printf "INFO: Updating credentials from assumed role...\n"
     # Export the credentials
@@ -668,6 +675,6 @@ function set_aws_credentials {
 # Start of the script
 # Set the AWS credentials
 set_aws_credentials "$1" || {
-    printf "Error Setting AWS credentials. Exiting...\n"
+    printf "ERROR setting AWS credentials. Exiting...\n"
     exit 1
 }
