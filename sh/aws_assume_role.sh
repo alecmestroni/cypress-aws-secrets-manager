@@ -9,7 +9,7 @@
 # is valid, the script will return 0.
 #
 # Required environment variables:
-# - DEVOPS_USER: The username for DevOps-related tasks.
+# - ROLE_NAME: The username for DevOps-related tasks.
 # - AWS_PROFILE_<environment>: The AWS CLI profile for the specified environment.
 # - ACCOUNT_ID_<environment>: The AWS account ID for the specified environment.
 # - AWS_USER_ID_FILE_NAME: The name of the file that stores the AWS user ID.
@@ -18,7 +18,7 @@
 # Function to check if all required variables are defined
 function check_required_variables {
     # Array of required variables
-    required_vars=("DEVOPS_USER" "AWS_PROFILE_${1^^}" "ACCOUNT_ID_${1^^}" "AWS_USER_ID_FILE_NAME" "USER_IDENTIFIER_PREFIX")
+    required_vars=("ROLE_NAME" "AWS_PROFILE_${1^^}" "ACCOUNT_ID_${1^^}" "AWS_USER_ID_FILE_NAME" "USER_IDENTIFIER_PREFIX")
 
     for var in "${required_vars[@]}"; do
         if [[ -z "${!var}" ]]; then
@@ -586,7 +586,7 @@ EOF
 # Function to assume an AWS role and save the credentials
 function assume_role_and_save_credentials {
     # Assume the AWS role and save the output
-    AWS_STS_OUTPUT=$(AWS_PROFILE="$AWS_PROFILE" aws sts assume-role --role-arn arn:aws:iam::"$ACCOUNT_ID":role/$DEVOPS_USER --role-session-name $SESSION_USER)
+    AWS_STS_OUTPUT=$(AWS_PROFILE="$AWS_PROFILE" aws sts assume-role --role-arn arn:aws:iam::"$ACCOUNT_ID":role/$ROLE_NAME --role-session-name $SESSION_USER)
     # Check if the assume-role command was successful
     if [ $? -ne 0 ]; then
         printf "Error assuming role. Exiting...\n"
@@ -652,15 +652,15 @@ function set_aws_credentials {
             printf "Error logging in with SSO. Exiting...\n"
             return 1
         }
-        printf "\nINFO: Assuming role: $DEVOPS_USER\n"
+        printf "\nINFO: Assuming role: $ROLE_NAME\n"
         # Assume the AWS role and save the credentials
         assume_role_and_save_credentials || {
-            printf "ERROR: Assuming role: $DEVOPS_USER. Exiting...\n"
+            printf "ERROR: Assuming role: $ROLE_NAME. Exiting...\n"
             return 1
         }
     }
     sleep 0.5
-    printf "\nSUCCESS: Successfully assumed role: $DEVOPS_USER, using AWS IAM credentials.\n\n"
+    printf "\nSUCCESS: Successfully assumed role: $ROLE_NAME, using AWS IAM credentials.\n\n"
 }
 
 # Start of the script
