@@ -322,7 +322,7 @@ function read_session_user {
 function prompt_for_session_user {
     # Loop for maximum 5 tries
     for ((tries = 1; tries <= 5; tries++)); do
-        printf "\nPlease enter your identifier (${valid_prefixes[*]})\n"
+        printf "\nPlease enter your identifier (${USER_IDENTIFIER_PREFIX[*]})\n"
         read -r identifier
 
         # Convert identifier to lowercase for case-insensitive matching
@@ -330,7 +330,7 @@ function prompt_for_session_user {
 
         # Check if the identifier starts with a valid prefix
         is_valid=false
-        for prefix in "${valid_prefixes[@]}"; do
+        for prefix in "${USER_IDENTIFIER_PREFIX[@]}"; do
             if [[ $lower_identifier =~ ^$prefix ]]; then
                 is_valid=true
                 break
@@ -338,7 +338,7 @@ function prompt_for_session_user {
         done
 
         if [[ $is_valid == false ]]; then
-            printf "Identifier is not valid. It must start with one of: ${valid_prefixes[*]}.\n"
+            printf "Identifier is not valid. It must start with one of: ${USER_IDENTIFIER_PREFIX[*]}.\n"
             if ((tries == 5)); then
                 printf "Maximum number of tries reached. Exiting...\n"
                 return 1
