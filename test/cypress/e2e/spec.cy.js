@@ -1,4 +1,6 @@
-describe('Cypress Configuration Tests', () => {
+describe('Cypress Integrations Tests', () => {
+
+  // Configurations
   it('should have the correct baseUrl', () => {
     expect(Cypress.config('baseUrl')).to.equal('https://www.google.com');
   });
@@ -21,8 +23,12 @@ describe('Cypress Configuration Tests', () => {
     expect(AWS_SECRET_MANAGER_CONFIG).to.have.property('region', 'region');
   });
 
+  // Secrets import
+
+  // This example case is simply the most basic one, which is retrieving credentials locally,
+  // because it is impossible to create a test that directly retrieves secrets from AWS Secret Manager, 
+  // and share it to the community. 
   it('should have the imported correctly the local secret: superSecretName', () => {
     expect(Cypress.env('superSecretName')).to.equal('superSecretValue');
   })
-
 });
