@@ -1,4 +1,4 @@
-const chalk = require("chalk");
+const chalk = require("chalk")
 const path = require('path');
 const fs = require('fs');
 const {
