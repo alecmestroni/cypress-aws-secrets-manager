@@ -14,7 +14,6 @@ jobs:
     container:
       image: cypress/browsers:node-20.6.1-chrome-116.0.5845.187-1-ff-117.0-edge-116.0.1938.76-1
     steps:
-      - uses: actions/checkout@v4ù
       - run: npm ci
       - run: cd test && npm ci
       - run: cd test && npm test
@@ -28,7 +27,6 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
       - run: npm ci
       - run: npm publish
         env:
