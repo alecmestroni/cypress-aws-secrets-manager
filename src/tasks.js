@@ -1,3 +1,4 @@
+const chalk = require("chalk");
 const {
     updateSecret,
 } = require('./utils');
