@@ -18,8 +18,8 @@ jobs:
           node-version: 20
       - run: npm ci
       - run: cd test && npm ci
-      - run: cd test && npm cy:run
-      - run: cd test && jest
+      - run: cd test && npm run cy:run
+      - run: cd test && npx jest
   publish-gpr:
     needs: build
     runs-on: ubuntu-latest
