@@ -29,7 +29,6 @@ const writeSecretsToFile = (jsonFilePath, secrets) => {
 
     // Write the secrets to the file
     fs.writeFileSync(jsonFilePath, JSON.stringify(secrets, null, 1));
-    console.log(`\n\x1B[32m√ \x1B[37mSecrets saved locally in: "${chalk.cyan(jsonFilePath)}"`);
 };
 
 const getLocalSecrets = (jsonFilePath) => {
@@ -76,19 +75,20 @@ function checkOnMandatoryKeys(objectToControl, mandatoryKeys) {
 }
 
 async function getAwsSecrets(strategy, awsSecretsManagerConfig, directory) {
+    errorAlreadyThrew = false
     console.log('AWS SSO strategy: ' + chalk.cyan(JSON.stringify(strategy)))
-    if (strategy == 'multi') {
-        return await tryMultiStrategy(awsSecretsManagerConfig, directory)
+    if (strategy === 'multi') {
+        return await tryMultiStrategy(awsSecretsManagerConfig, directory);
     } else {
-        return await getSecretsFromAws(awsSecretsManagerConfig, strategy, directory)
+        return await getSecretsFromAws(awsSecretsManagerConfig, strategy, directory);
     }
+
 }
 
 async function tryMultiStrategy(awsSecretsManagerConfig, directory) {
     let counter = 0;
     let success = false;
     let response;
-
     while (counter < strategyTypes.length - 1 && !success) {
         try {
             counter++;
@@ -109,11 +109,11 @@ async function tryMultiStrategy(awsSecretsManagerConfig, directory) {
 
 async function getSecretsFromAws(awsSecretsManagerConfig, strategy, directory) {
     try {
-        const client = await createClient(awsSecretsManagerConfig, strategy, 1, directory);
+        const client = await createClient(awsSecretsManagerConfig, strategy, 1, directory, true);
         const response = await fetchSecret(client, awsSecretsManagerConfig.secretName);
         return parseSecret(response);
     } catch (error) {
-        if (!errorAlreadyThrew) throwException(error);
+        throwException(error, true, true);
         throwException('Error while setting credentials. Please check the console logs for more information.', false, false);
     }
 }
@@ -140,6 +140,7 @@ function parseSecret(response) {
 }
 
 async function createClient(awsSecretsManagerConfig, strategy, counter, directory, throwError) {
+
     switch (strategy) {
         case 'profile':
             return setClientWithSSO(awsSecretsManagerConfig, counter, throwError)
@@ -156,18 +157,19 @@ async function createClient(awsSecretsManagerConfig, strategy, counter, director
 }
 
 function setClientWithSSO(awsSecretsManagerConfig, counter = 1, throwError = true) {
+    console.log('HERE')
+
     console.log('\n' + converter.toOrdinal(counter) + ' attempt: Trying to retrieve secrets using profile: ' + chalk.cyan(JSON.stringify(awsSecretsManagerConfig.profile)))
     if (awsSecretsManagerConfig.profile) {
         return new SecretsManagerClient({
             region: awsSecretsManagerConfig.region,
             credentials: fromSSO({ profile: awsSecretsManagerConfig.profile }),
         })
-    } else {
-        if (throwError) {
-            throwException('Missing \'profile\' key in awsSecretsManagerConfig')
-            errorAlreadyThrew = true
-        }
+    } else if (throwError) {
+        throwException('Missing \'profile\' key in awsSecretsManagerConfig', false, throwError)
+        errorAlreadyThrew = true
     }
+
 }
 
 function setClientWithoutCredentials(awsSecretsManagerConfig, counter = 1) {
@@ -194,7 +196,7 @@ function setClientWithCredentials(awsSecretsManagerConfig, directory, counter = 
             credentials: credentials
         })
     } else {
-        throwException('Missing \'pathToCredentials\' key in awsSecretsManagerConfig', throwError)
+        throwException('Missing \'pathToCredentials\' key in awsSecretsManagerConfig', false, throwError)
         errorAlreadyThrew = true
     }
 }
@@ -223,7 +225,6 @@ async function updateSecret(env, secretValue) {
 
         const strategy = env.AWS_SSO_STRATEGY ?? 'multi'
         const existingSecrets = await getAwsSecrets(strategy, awsSecretsManagerConfig)
-
         const updatedSecrets = { ...existingSecrets, ...secretValue }
 
         const putCommand = new PutSecretValueCommand({
@@ -236,7 +237,7 @@ async function updateSecret(env, secretValue) {
         console.log(chalk.green('\n√ ') + 'Secret updated successfully: ' + chalk.cyan(secretName))
         return putResponse
     } catch (error) {
-        console.error(chalk.red('⚠️  Error updating secret: '), error)
+        console.log(chalk.red('⚠️  Error updating secret: '), error)
         throw error
     }
 }

@@ -26,28 +26,37 @@ async function getSecretFromAWS(env, directory) {
         return env;
     }
 
+    checkOnMandatoryKeys(awsSecretsManagerConfig, MANDATORY_KEYS);
+
     const secretName = awsSecretsManagerConfig.secretName;
-    const localDir = env.AWS_SECRETS_LOCAL_DIR ?? '';
-    const tempFilePath = createFilePath(localDir, secretName);
-    const jsonFilePath = path.join(directory, tempFilePath);
+    const localDir = env?.AWS_SECRETS_LOCAL_DIR
 
     try {
-        if (fs.existsSync(jsonFilePath)) {
+        if (localDir) {
+            const tempFilePath = createFilePath(localDir, secretName);
+            const jsonFilePath = path.join(directory, tempFilePath);
             console.log(`Extracting local configurations from: "${chalk.cyan(jsonFilePath)}"\n`);
-            const secrets = getLocalSecrets(jsonFilePath);
-            return updateEnvWithSecrets(env, secrets, tempFilePath);
+            if (fs.existsSync(jsonFilePath)) {
+                const secrets = getLocalSecrets(jsonFilePath);
+                return updateEnvWithSecrets(env, secrets, tempFilePath);
+            } else {
+                console.log(`${chalk.yellow(`⚠️  Error loading secrets: Local file not found.\n`)}${chalk.green('\nTrying to fetch secrets from AWS Secrets Manager...')}`);
+                console.log(separator);
+            }
         }
 
-        checkOnMandatoryKeys(awsSecretsManagerConfig, MANDATORY_KEYS);
         const secrets = await getAwsSecrets(strategy, awsSecretsManagerConfig, directory);
         env = updateEnvWithSecrets(env, secrets, secretName);
 
         if (localDir) {
+            const tempFilePath = createFilePath(localDir, secretName);
+            const jsonFilePath = path.join(directory, tempFilePath);
             writeSecretsToFile(jsonFilePath, secrets);
+            console.log(`\n\x1B[32m√ \x1B[37mSecrets saved locally in: "${chalk.cyan(jsonFilePath)}"`);
         }
     } catch (error) {
-        console.error(chalk.red(`⚠️  Error loading secrets: ${error.message}`));
-        throw new Error(`Uncaught error loading secrets: ${error}`);
+        console.log(chalk.red(`⚠️  ${error.message}`));
+        throw new Error(`Uncaught error loading secrets: ${error.message}`);
     }
 
     return env;

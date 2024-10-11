@@ -1,0 +1,12 @@
+{
+  "baseUrl": "https://www.google.com",
+  "env": {
+    "homepage": "/homepage",
+    "AWS_SSO_STRATEGY": "unset",
+    "AWS_SECRETS_LOCAL_DIR": "aws-secrets",
+    "AWS_SECRET_MANAGER_CONFIG": {
+      "secretName": "secretName",
+      "region": "region"
+    }
+  }
+}
