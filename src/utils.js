@@ -218,6 +218,7 @@ async function updateSecret(env, secretValue) {
     const awsSecretsManagerConfig = env.awsSecretsManagerConfig ?? env.AWS_SECRET_MANAGER_CONFIG;
     const secretName = awsSecretsManagerConfig.secretName
     const kmsKeyId = awsSecretsManagerConfig.kmsKeyId
+    console.log('Updating secret value for secretName: ' + chalk.cyan(secretName) + ' for kmsKeyId: ' + chalk.cyan(kmsKeyId));
 
     try {
         if (typeof secretValue !== 'object') {
@@ -231,7 +232,7 @@ async function updateSecret(env, secretValue) {
 
         const putCommand = new PutSecretValueCommand({
             SecretId: secretName,
-            KmsKeyId: kmsKeyId,
+            ...(kmsKeyId && { KmsKeyId: kmsKeyId }),
             SecretString: JSON.stringify(updatedSecrets),
         })
 
