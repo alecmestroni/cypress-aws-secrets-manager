@@ -110,7 +110,7 @@ async function tryMultiStrategy(awsSecretsManagerConfig, directory) {
 async function getSecretsFromAws(awsSecretsManagerConfig, strategy, directory) {
     try {
         const client = await createClient(awsSecretsManagerConfig, strategy, 1, directory, true);
-        const response = await fetchSecret(client, awsSecretsManagerConfig.secretName);
+        const response = await fetchSecret(client, awsSecretsManagerConfig.secretName, awsSecretsManagerConfig.kmsKeyId);
         return parseSecret(response);
     } catch (error) {
         throwException(error, true, true);
@@ -118,10 +118,11 @@ async function getSecretsFromAws(awsSecretsManagerConfig, strategy, directory) {
     }
 }
 
-async function fetchSecret(client, secretName) {
+async function fetchSecret(client, secretName, kmsKeyId) {
     const response = await client.send(
         new GetSecretValueCommand({
             SecretId: secretName,
+            ...(kmsKeyId && { KmsKeyId: kmsKeyId }),
             VersionStage: "AWSCURRENT",
         })
     );
