@@ -1,4 +1,4 @@
-const { SecretsManagerClient, GetSecretValueCommand, PutSecretValueCommand } = require("@aws-sdk/client-secrets-manager")
+const { SecretsManagerClient, GetSecretValueCommand, UpdateSecretCommand } = require("@aws-sdk/client-secrets-manager")
 const { fromSSO } = require("@aws-sdk/credential-providers")
 const converter = require('number-to-words')
 const chalk = require("chalk")
@@ -108,9 +108,11 @@ async function tryMultiStrategy(awsSecretsManagerConfig, directory) {
 }
 
 async function getSecretsFromAws(awsSecretsManagerConfig, strategy, directory) {
+    const secretName = awsSecretsManagerConfig.secretName
+
     try {
         const client = await createClient(awsSecretsManagerConfig, strategy, 1, directory, true);
-        const response = await fetchSecret(client, awsSecretsManagerConfig.secretName, awsSecretsManagerConfig.kmsKeyId);
+        const response = await fetchSecret(client, secretName);
         return parseSecret(response);
     } catch (error) {
         throwException(error, true, true);
@@ -118,11 +120,10 @@ async function getSecretsFromAws(awsSecretsManagerConfig, strategy, directory) {
     }
 }
 
-async function fetchSecret(client, secretName, kmsKeyId) {
+async function fetchSecret(client, secretName) {
     const response = await client.send(
         new GetSecretValueCommand({
             SecretId: secretName,
-            ...(kmsKeyId && { KmsKeyId: kmsKeyId }),
             VersionStage: "AWSCURRENT",
         })
     );
@@ -230,12 +231,12 @@ async function updateSecret(env, secretValue) {
         const existingSecrets = await getAwsSecrets(strategy, awsSecretsManagerConfig)
 
         const updatedSecrets = { ...existingSecrets, ...secretValue }
-
-        const putCommand = new PutSecretValueCommand({
+        const body = {
             SecretId: secretName,
-            ...(kmsKeyId && { KmsKeyId: kmsKeyId }),
             SecretString: JSON.stringify(updatedSecrets),
-        })
+            ...(kmsKeyId && { KmsKeyId: kmsKeyId }),
+        }
+        const putCommand = new UpdateSecretCommand(body)
 
         const client = await createClient(awsSecretsManagerConfig, strategy)
         const putResponse = await client.send(putCommand)

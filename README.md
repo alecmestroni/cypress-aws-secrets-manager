@@ -164,18 +164,19 @@ The main object required by this library is AWS_SECRET_MANAGER_CONFIG, which con
     "secretName": "AWS_SECRET_NAME",
     "profile": "AWS_PROFILE_NAME",
     "region": "AWS_REGION",
+    "kmsKeyId": "AWS_SECRET_KMS_KEY",
     "pathToCredentials": "PATH_TO_AWS_CREDENTIALS.JSON"
   }
 }
 ```
 
-| Parameter | Mandatory | Notes | Default |
-| -- | | -- | - |
-| secretName | TRUE | AWS secret name | \ |
-| region | TRUE | AWS Secrets Manager region | \ |
-| profile | FALSE | AWS SSO profile name | 'default' profile |
-| pathToCredentials | FALSE | path to credentials file, used with '[credentials](#credential-file-example)' if u want to write them in a file | Same folder as "cypress.config.js" |
-| |
+| Parameter           | Required                                                      | Description                                                                | Default                            |
+| ------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------- |
+| `secretName`        | ✅ Yes                                                        | AWS secret name                                                            | —                                  |
+| `region`            | ✅ Yes                                                        | AWS Secrets Manager region                                                 | —                                  |
+| `profile`           | ❌ No                                                         | AWS SSO profile name                                                       | `'default'` profile                |
+| `kmsKeyId`          | Required only when updating a secret from another AWS account | AWS KMS key ID used for secret encryption                                  | —                                  |
+| `pathToCredentials` | ❌ No                                                         | Path to credentials file (used with `credentials` to write them to a file) | Same folder as `cypress.config.js` |
 
 ### AWS login strategies
 
@@ -266,6 +267,7 @@ Simply add **"AWS_SSO_STRATEGY"** and **AWS_SECRET_MANAGER_CONFIG** inside the "
       "secretName": "AWS_SECRET_NAME",
       "profile": "AWS_PROFILE_NAME",
       "region": "AWS_REGION",
+      "kmsKeyId": "AWS_SECRET_KMS_KEY",
       "pathToCredentials": "PATH_TO_AWS_CREDENTIALS.JSON"
     }
   }
@@ -295,6 +297,7 @@ module.exports = defineConfig({
       secretName: 'AWS_SECRET_NAME',
       profile: 'AWS_PROFILE_NAME',
       region: 'AWS_REGION',
+      kmsKeyId: 'AWS_SECRET_KMS_KEY',
       pathToCredentials: 'PATH_TO_AWS_CREDENTIALS.JSON'
     }
   }
@@ -342,6 +345,7 @@ See [here](#overwrite-environment-variables-when-running-on-a-different-machine-
       "secretName": "AWS_SECRET_NAME",
       "profile": "AWS_PROFILE_NAME",
       "region": "AWS_REGION",
+      "kmsKeyId": "AWS_SECRET_KMS_KEY",
       "pathToCredentials": "PATH_TO_AWS_CREDENTIALS.JSON"
     }
   }
