@@ -217,6 +217,7 @@ const throwException = (errorMessage, logInTerminal = true, throwError = true) =
 async function updateSecret(env, secretValue) {
     const awsSecretsManagerConfig = env.awsSecretsManagerConfig ?? env.AWS_SECRET_MANAGER_CONFIG;
     const secretName = awsSecretsManagerConfig.secretName
+    const kmsKeyId = awsSecretsManagerConfig.kmsKeyId
 
     try {
         if (typeof secretValue !== 'object') {
@@ -225,10 +226,12 @@ async function updateSecret(env, secretValue) {
 
         const strategy = env.AWS_SSO_STRATEGY ?? 'multi'
         const existingSecrets = await getAwsSecrets(strategy, awsSecretsManagerConfig)
+
         const updatedSecrets = { ...existingSecrets, ...secretValue }
 
         const putCommand = new PutSecretValueCommand({
             SecretId: secretName,
+            KmsKeyId: kmsKeyId,
             SecretString: JSON.stringify(updatedSecrets),
         })
 
