@@ -74,6 +74,8 @@ function checkOnMandatoryKeys(objectToControl, mandatoryKeys) {
 }
 
 async function getAwsSecrets(strategy, awsSecretsManagerConfig, directory) {
+  info('AWS SSO strategy: ' + JSON.stringify(strategy))
+
   errorAlreadyThrew = false
   if (strategy === 'multi') {
     return await tryMultiStrategy(awsSecretsManagerConfig, directory)

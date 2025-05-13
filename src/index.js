@@ -1,7 +1,6 @@
 // index.js
 const path = require('path')
 const fs = require('fs')
-const { info, warn, error } = require('./logger')
 const {
   createFilePath,
   updateEnvWithSecrets,
@@ -13,7 +12,7 @@ const {
 } = require('./utils')
 const { setSilentMode } = require('./config')
 const chalk = require('chalk')
-const { log } = require('./logger')
+const { log, info, warn, error } = require('./logger.js')
 
 const separator = '\n' + '='.repeat(100) + '\n'
 const MANDATORY_KEYS = ['secretName', 'region']
@@ -53,7 +52,6 @@ async function getSecretFromAWS(env, directory) {
       }
     }
 
-    info('AWS SSO strategy: ' + JSON.stringify(strategy))
     const secrets = await getAwsSecrets(strategy, awsSecretsManagerConfig, directory)
     env = updateEnvWithSecrets(env, secrets, secretName)
     logSecrets(secrets, secretName)

@@ -8,16 +8,15 @@ function log(...args) {
 }
 
 function info(...args) {
-  // visibile solo se non in silentMode
+  // anche in silentMode vogliamo vedere warning
   if (!getSilentMode()) {
     console.log(...args)
   }
 }
 
 function warn(...args) {
-  if (!getSilentMode()) {
-    console.warn(chalk.yellow(...args))
-  }
+  // anche in silentMode vogliamo vedere warning
+  console.warn(chalk.yellow(...args))
 }
 
 function error(...args) {
