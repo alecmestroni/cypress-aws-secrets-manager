@@ -1,67 +1,75 @@
-const chalk = require("chalk")
-const path = require('path');
-const fs = require('fs');
+// index.js
+const path = require('path')
+const fs = require('fs')
+const { info, warn, error } = require('./logger')
 const {
-    createFilePath,
-    updateEnvWithSecrets,
-    getLocalSecrets,
-    checkOnMandatoryKeys,
-    getAwsSecrets,
-    writeSecretsToFile
-} = require('./utils');
+  createFilePath,
+  updateEnvWithSecrets,
+  getLocalSecrets,
+  checkOnMandatoryKeys,
+  getAwsSecrets,
+  writeSecretsToFile,
+  logSecrets
+} = require('./utils')
+const { setSilentMode } = require('./config')
+const chalk = require('chalk')
+const { log } = require('./logger')
 
-const separator = chalk.grey('\n====================================================================================================\n');
-
-const MANDATORY_KEYS = ['secretName', 'region'];
+const separator = '\n' + '='.repeat(100) + '\n'
+const MANDATORY_KEYS = ['secretName', 'region']
 
 async function getSecretFromAWS(env, directory) {
-    const strategy = env.AWS_SSO_STRATEGY ?? 'multi';
-    const awsSecretsManagerConfig = env.awsSecretsManagerConfig ?? env.AWS_SECRET_MANAGER_CONFIG;
+  setSilentMode(env.ENV_LOG_MODE === 'silent')
 
-    console.log(separator);
-    console.log('Starting plugin: ' + chalk.green('cypress-aws-secrets-manager\n'));
+  const strategy = env.AWS_SSO_STRATEGY ?? 'multi'
+  const awsSecretsManagerConfig = env.awsSecretsManagerConfig ?? env.AWS_SECRET_MANAGER_CONFIG
 
-    if (!awsSecretsManagerConfig) {
-        console.log(chalk.white('⚠️  Missing awsSecretsManagerConfig in env variables. Continuing without secrets!'));
-        return env;
+  log(separator)
+  log('Starting plugin: ' + chalk.green('cypress-aws-secrets-manager\n'))
+
+  if (!awsSecretsManagerConfig) {
+    warn('⚠️  Missing awsSecretsManagerConfig in env variables. Continuing without secrets!')
+    return env
+  }
+
+  checkOnMandatoryKeys(awsSecretsManagerConfig, MANDATORY_KEYS)
+  const secretName = awsSecretsManagerConfig.secretName
+  const localDir = env.AWS_SECRETS_LOCAL_DIR
+
+  try {
+    if (localDir) {
+      const tempFilePath = createFilePath(localDir, secretName)
+      const jsonFilePath = path.join(directory, tempFilePath)
+      info(`Extracting local configurations from: "${jsonFilePath}"\n`)
+      if (fs.existsSync(jsonFilePath)) {
+        const secrets = getLocalSecrets(jsonFilePath)
+        env = updateEnvWithSecrets(env, secrets, tempFilePath)
+        logSecrets(secrets, tempFilePath) // logSecrets userà internamente logger.js
+        return env
+      } else {
+        warn(`⚠️  Error loading secrets: Local file not found.\n`)
+        info('Trying to fetch secrets from AWS Secrets Manager...')
+        info(separator)
+      }
     }
 
-    checkOnMandatoryKeys(awsSecretsManagerConfig, MANDATORY_KEYS);
+    info('AWS SSO strategy: ' + JSON.stringify(strategy))
+    const secrets = await getAwsSecrets(strategy, awsSecretsManagerConfig, directory)
+    env = updateEnvWithSecrets(env, secrets, secretName)
+    logSecrets(secrets, secretName)
 
-    const secretName = awsSecretsManagerConfig.secretName;
-    const localDir = env?.AWS_SECRETS_LOCAL_DIR
-
-    try {
-        if (localDir) {
-            const tempFilePath = createFilePath(localDir, secretName);
-            const jsonFilePath = path.join(directory, tempFilePath);
-            console.log(`Extracting local configurations from: "${chalk.cyan(jsonFilePath)}"\n`);
-            if (fs.existsSync(jsonFilePath)) {
-                const secrets = getLocalSecrets(jsonFilePath);
-                return updateEnvWithSecrets(env, secrets, tempFilePath);
-            } else {
-                console.log(`${chalk.yellow(`⚠️  Error loading secrets: Local file not found.\n`)}${chalk.green('\nTrying to fetch secrets from AWS Secrets Manager...')}`);
-                console.log(separator);
-            }
-        }
-
-        const secrets = await getAwsSecrets(strategy, awsSecretsManagerConfig, directory);
-        env = updateEnvWithSecrets(env, secrets, secretName);
-
-        if (localDir) {
-            const tempFilePath = createFilePath(localDir, secretName);
-            const jsonFilePath = path.join(directory, tempFilePath);
-            writeSecretsToFile(jsonFilePath, secrets);
-            console.log(`\n\x1B[32m√ \x1B[37mSecrets saved locally in: "${chalk.cyan(jsonFilePath)}"`);
-        }
-    } catch (error) {
-        console.log(chalk.red(`⚠️  ${error.message}`));
-        throw new Error(`Uncaught error loading secrets: ${error.message}`);
+    if (localDir) {
+      const tempFilePath = createFilePath(localDir, secretName)
+      const jsonFilePath = path.join(directory, tempFilePath)
+      writeSecretsToFile(jsonFilePath, secrets)
+      info(`\n√ Secrets saved locally in: "${jsonFilePath}"`)
     }
+  } catch (err) {
+    error(`⚠️  ${err.message}`)
+    throw new Error(`Uncaught error loading secrets: ${err.message}`)
+  }
 
-    return env;
-};
+  return env
+}
 
-module.exports = {
-    getSecretFromAWS
-};  
+module.exports = { getSecretFromAWS }

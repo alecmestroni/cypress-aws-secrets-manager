@@ -1,4 +1,4 @@
-const { defineConfig } = require("cypress");
+const { defineConfig } = require('cypress')
 
 module.exports = defineConfig({
   e2e: {
@@ -10,5 +10,7 @@ module.exports = defineConfig({
       return config
     }
   },
+  env: {
+    ENV_LOG_MODE: 'silent'
+  }
 })
-
