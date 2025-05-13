@@ -11,6 +11,6 @@ module.exports = defineConfig({
     }
   },
   env: {
-    ENV_LOG_MODE: 'silent'
+    ENV_LOG_MODE: 'verbose'
   }
 })
