@@ -112,8 +112,9 @@ function install_jq {
             scoop install jq
         else
             # If scoop is not installed, print a message with instructions to install jq using PowerShell and return 1
-            printf "\nPlease install SCOOP or use the following commands from POWERSHELL as an administrator and try again.\n
-               Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://get.scoop.sh')\n" >&2
+            printf "\nALERT: 'SCOOP' is either not installed or the installed version is too low.\n
+Please install SCOOP or use the following commands from POWERSHELL as an administrator and try again.\n
+command -> Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://get.scoop.sh')\n" >&2
             exit 1
         fi
     else
@@ -135,7 +136,7 @@ function install_aws_cli {
         return
     elif [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]] || [[ "$OSTYPE" == "win32"* ]]; then
         # If the operating system is not macOS or Linux, print a message with instructions to install AWS CLI and return 1
-        printf "\nPlease install AWS CLI using the following commands and try again.\n
+printf "\nALERT: 'AWS CLI' is either not installed or the installed version is too low.\nPlease install AWS CLI using the following commands and try again.\n
             1) Download the AWS CLI version 2 MSI installer package. Open a web browser and navigate to the following URL to download the package:
             https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html#getting-started-install-instructions
             2) Run the downloaded MSI installer.
