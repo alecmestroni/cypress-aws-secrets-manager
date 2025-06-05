@@ -113,8 +113,7 @@ function install_jq {
         else
             # If scoop is not installed, print a message with instructions to install jq using PowerShell and return 1
             printf "\nPlease install SCOOP or use the following commands from POWERSHELL as an administrator and try again.\n
-               Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://get.scoop.sh')\n
-              \n\n" >&2
+               Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://get.scoop.sh')\n" >&2
             exit 1
         fi
     else
