@@ -115,8 +115,7 @@ function install_jq {
             printf "\nPlease install SCOOP or use the following commands from POWERSHELL as an administrator and try again.\n
                Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://get.scoop.sh')\n
               \n\n" >&2
-            sleep 5
-            return 1
+            exit 1
         fi
     else
         # If the operating system is not recognized, print a message and return 1
@@ -142,7 +141,7 @@ function install_aws_cli {
             https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html#getting-started-install-instructions
             2) Run the downloaded MSI installer.
             3) Follow the instructions in the installer to complete the installation.\n\n" >&2
-        return 1
+        exit 1
     else
         # If the operating system is not recognized, print a message and return 1
         printf "\nUnsupported operating system. Please install jq manually.\n" >&2
