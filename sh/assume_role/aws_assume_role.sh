@@ -304,9 +304,10 @@ function prerequisites {
 
 # Function to set AWS user identifier file
 function set_aws_user_identifier_file {
-    AWS_USER_ID_FILE_PATH="$DIR/$AWS_USER_ID_FILE_NAME"
-    if [ ! -r $AWS_USER_ID_FILE_PATH ]; then
-        mkdir -p $(dirname "$AWS_USER_ID_FILE_PATH") && touch "$AWS_USER_ID_FILE_PATH"
+    local SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    AWS_USER_ID_FILE_PATH="$SCRIPT_DIR/$AWS_USER_ID_FILE_NAME"
+    if [ ! -r "$AWS_USER_ID_FILE_PATH" ]; then
+        mkdir -p "$(dirname "$AWS_USER_ID_FILE_PATH")" && touch "$AWS_USER_ID_FILE_PATH"
     fi
 
 }
@@ -366,12 +367,12 @@ function prompt_for_session_user {
 
 # Function to validate session user
 function validate_session_user {
-    # Validate SESSION_USER against USER_IDENTIFIER_PREFIX
+    # Validate SESSION_USER against USER_IDENTIFIER
     local lower_session_user=$(echo "$SESSION_USER" | tr '[:upper:]' '[:lower:]')
     local is_valid=false
 
-    for prefix in "${USER_IDENTIFIER_PREFIX[@]}"; do
-        if [[ $lower_session_user =~ ^$prefix ]]; then
+    for identifier in "${USER_IDENTIFIER[@]}"; do
+        if [[ $lower_session_user =~ ^$identifier ]]; then
             is_valid=true
             break
         fi
@@ -435,7 +436,8 @@ function prompt_for_aws_method {
         esac
         # If valid choice, add AWS_METHOD to AWS_USER_ID_FILE_PATH
         if [[ -f "$AWS_USER_ID_FILE_PATH" ]]; then
-            echo $(jq '. + {"AWS_METHOD": "'"$AWS_METHOD"'"}' "$AWS_USER_ID_FILE_PATH") >"$AWS_USER_ID_FILE_PATH"
+            local temp_file="${AWS_USER_ID_FILE_PATH}.tmp"
+            jq '. + {"AWS_METHOD": "'"$AWS_METHOD"'"}' "$AWS_USER_ID_FILE_PATH" > "$temp_file" && mv "$temp_file" "$AWS_USER_ID_FILE_PATH"
         else
             printf "File $AWS_USER_ID_FILE_PATH does not exist. Cannot save AWS_METHOD.\n"
             return 1
@@ -515,7 +517,7 @@ function install_wslu {
     if [[ "$BROWSER" != "wslview" ]]; then
         # Check if wslu is not installed
         if ! command -v wslu &>/dev/null; then
-            echo '\nWSLU is not missing, this could cause errors. Installing now...\n'
+            echo -e '\nWSLU is missing, this could cause errors. Installing now...\n'
             # Update the package lists for upgrades and new packages
             sudo apt-get update
             # Install wslu
@@ -622,14 +624,14 @@ function assume_role_and_save_credentials {
             printf "INFO: Variables set successfully in ~/.aws/credentials.\n"
         else
             printf "ERROR: Cannot set variables in ~/.aws/credentials.\n"
-            exit
+            return 1
         fi
     elif [[ "$AWS_METHOD" == 'export' ]]; then
         if [[ -n "$AWS_ACCESS_KEY_ID" ]] && [[ -n "$AWS_SECRET_ACCESS_KEY" ]] && [[ -n "$AWS_SESSION_TOKEN" ]] && [[ -n "$AWS_CREDENTIALS_EXPIRATION" ]]; then
             printf "INFO: Environment variables set successfully.\n"
         else
             printf "ERROR: Cannot set environment variables\n"
-            exit
+            return 1
         fi
     fi
 }
