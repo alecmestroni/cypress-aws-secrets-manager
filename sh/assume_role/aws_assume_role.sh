@@ -38,8 +38,12 @@ function check_required_variables {
         return 1
     fi
 
-    # Assign one of the identifiers to USER_IDENTIFIER
-    USER_IDENTIFIER="${USER_IDENTIFIER_PREFIX:-$USER_IDENTIFIER_SUFFIX}"
+    # Assign the array to USER_IDENTIFIER
+    if [[ -n "$USER_IDENTIFIER_PREFIX" ]]; then
+        USER_IDENTIFIER=("${USER_IDENTIFIER_PREFIX[@]}")
+    else
+        USER_IDENTIFIER=("${USER_IDENTIFIER_SUFFIX[@]}")
+    fi
 }
 
 # Function to set the environment variables based on the input argument
