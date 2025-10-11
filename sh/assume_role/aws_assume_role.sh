@@ -38,7 +38,7 @@ function check_required_variables {
         return 1
     fi
 
-    # Assign the array to USER_IDENTIFIER
+    # Assign one of the identifiers to USER_IDENTIFIER
     if [[ -n "$USER_IDENTIFIER_PREFIX" ]]; then
         USER_IDENTIFIER=("${USER_IDENTIFIER_PREFIX[@]}")
     else
@@ -316,7 +316,15 @@ function read_session_user {
     # Check if USER_IDENTIFIER exists in AWS_USER_ID_FILE_PATH
     if ! jq -e .USER_IDENTIFIER "$AWS_USER_ID_FILE_PATH" >/dev/null 2>&1; then
         # If not, set SESSION_USER to the current user
-        SESSION_USER="$(whoami)"
+        local raw_user="$(whoami)"
+        # Extract username part after '+' if present
+        if [[ "$raw_user" == *"+"* ]]; then
+            SESSION_USER="${raw_user##*+}"
+        else
+            SESSION_USER="$raw_user"
+        fi
+        # Convert to lowercase for consistency
+        SESSION_USER=$(echo "$SESSION_USER" | tr '[:upper:]' '[:lower:]')
     else
         # If yes, set SESSION_USER to the value of USER_IDENTIFIER
         SESSION_USER=$(jq -r .USER_IDENTIFIER "$AWS_USER_ID_FILE_PATH")
