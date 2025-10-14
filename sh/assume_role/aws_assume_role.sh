@@ -543,7 +543,7 @@ function login_with_sso {
     if [ "$ACCOUNT_ID_TEMP" != "$ACCOUNT_ID" ]; then
         # Loop through the output of the AWS SSO login command
         printf "WARNING: AWS SSO session expired, login needed.\n\n"
-        sleep 0.5
+        sleep 0.1
         printf "INFO: Logging in using AWS SSO...\n\n"
         while IFS= read -r line; do
             echo $line
@@ -590,13 +590,13 @@ EOF
         # If the method is 'export', export the credentials as environment variables
         export AWS_ACCESS_KEY_ID=$(echo "$AWS_STS_OUTPUT" | jq -r '.Credentials.AccessKeyId')
         printf "INFO: AWS_ACCESS_KEY_ID set.\n"
-        sleep 0.5
+        sleep 0.1
         export AWS_SECRET_ACCESS_KEY=$(echo "$AWS_STS_OUTPUT" | jq -r '.Credentials.SecretAccessKey')
         printf "INFO: AWS_SECRET_ACCESS_KEY set.\n"
-        sleep 0.5
+        sleep 0.1
         export AWS_SESSION_TOKEN=$(echo "$AWS_STS_OUTPUT" | jq -r '.Credentials.SessionToken')
         printf "INFO: AWS_SESSION_TOKEN set.\n"
-        sleep 0.5
+        sleep 0.1
         export AWS_CREDENTIALS_EXPIRATION=$(expiration_date)
         export AWS_ACCOUNT_ID=$(echo "$AWS_STS_OUTPUT" | jq -r '.AssumedRoleUser.Arn | split(":") | .[4]')
     else
@@ -636,6 +636,43 @@ function assume_role_and_save_credentials {
     fi
 }
 
+# Function to check if AWS profiles are configured
+function check_aws_profiles {
+    local env="$1"
+    local aws_profile_var="AWS_PROFILE_$env"
+    local aws_profile="${!aws_profile_var}"
+    
+    printf "INFO: Checking AWS profile configuration for environment: $env\n"
+    
+    # Check if AWS CLI is available
+    if ! command -v aws &>/dev/null; then
+        printf "ERROR: AWS CLI is not installed or not in PATH.\n"
+        return 1
+    fi
+    
+    # Get list of configured profiles
+    local configured_profiles
+    if ! configured_profiles=$(aws configure list-profiles 2>/dev/null); then
+        printf "ERROR: Cannot retrieve AWS profiles. Check your AWS configuration.\n"
+        printf "Make sure ~/.aws/config exists and is properly configured.\n"
+        return 1
+    fi
+    
+    # Check if the required profile exists
+    if ! echo "$configured_profiles" | grep -q "^${aws_profile}$"; then
+        printf "ERROR: AWS profile '$aws_profile' is not configured.\n"
+        printf "Available profiles:\n"
+        echo "$configured_profiles" | sed 's/^/  - /'
+        printf "\nPlease configure the missing profile in ~/.aws/config\n"
+        printf "You can use config.example as a reference.\n"
+        printf "\nRequired profile for environment '$env': $aws_profile\n"
+        return 1
+    fi
+    
+    printf "INFO: AWS profile '$aws_profile' found and configured.\n"
+    return 0
+}
+
 # Function to set the AWS credentials
 function set_aws_credentials {
     # Check the environment variables
@@ -646,6 +683,11 @@ function set_aws_credentials {
     # Set the environment
     set_environment "$1" || {
         printf "Error installing Environment. Exiting...\n"
+        return 1
+    }
+    # Check if AWS profiles are properly configured
+    check_aws_profiles "$ENV" || {
+        printf "Error: AWS profiles not properly configured. Exiting...\n"
         return 1
     }
     # Install the prerequisites
@@ -681,7 +723,7 @@ function set_aws_credentials {
             return 1
         }
     }
-    sleep 0.5
+    sleep 0.1
     printf "\nSUCCESS: Successfully assumed role: $ROLE_NAME, using AWS IAM credentials.\n\n"
 }
 
