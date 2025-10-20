@@ -17,6 +17,30 @@
 
 ENV=$(echo "$1" | tr '[:lower:]' '[:upper:]')
 
+# Logging helpers to unify output format across scripts
+function log_info {
+    printf "ℹ️  %b\n" "$1"
+}
+
+function log_success {
+    printf "✅ %b\n" "$1"
+}
+
+function log_warning {
+    printf "⚠️  %b\n" "$1"
+}
+
+function log_error {
+    printf "❌ %b\n" "$1"
+}
+
+function log_section {
+    local title="$1"
+    printf "\n==============================================================\n"
+    printf "  %s\n" "$title"
+    printf "==============================================================\n\n"
+}
+
 function check_required_variables {
     # Array of required variables
     required_vars=("ROLE_NAME" "AWS_PROFILE_$ENV" "ACCOUNT_ID_$ENV" "AWS_USER_ID_FILE_NAME")
@@ -24,17 +48,17 @@ function check_required_variables {
     # Check if all required variables are defined
     for var in "${required_vars[@]}"; do
         if [[ -z "${!var}" ]]; then
-            printf "Error: The required variable '%s' is not defined. Please ensure it is present in aws_authenticate.sh\n" "$var"
+            log_error "The required variable '$var' is not defined. Please ensure it is present in aws_authenticate.sh."
             return 1
         fi
     done
 
     # Check that exactly one of USER_IDENTIFIER_PREFIX or USER_IDENTIFIER_SUFFIX is set
     if [[ -n "$USER_IDENTIFIER_PREFIX" && -n "$USER_IDENTIFIER_SUFFIX" ]]; then
-        printf "Error: Both USER_IDENTIFIER_PREFIX and USER_IDENTIFIER_SUFFIX are defined. Please ensure only one is set.\n"
+        log_error "Both USER_IDENTIFIER_PREFIX and USER_IDENTIFIER_SUFFIX are defined. Please ensure only one is set."
         return 1
     elif [[ -z "$USER_IDENTIFIER_PREFIX" && -z "$USER_IDENTIFIER_SUFFIX" ]]; then
-        printf "Error: Neither USER_IDENTIFIER_PREFIX nor USER_IDENTIFIER_SUFFIX is defined. Please define one of them.\n"
+        log_error "Neither USER_IDENTIFIER_PREFIX nor USER_IDENTIFIER_SUFFIX is defined. Please define one of them."
         return 1
     fi
 
@@ -64,12 +88,13 @@ function check_brew {
         # Check if brew is installed
         if ! command -v brew &>/dev/null; then
             # If brew is not installed, print an alert message and ask the user if they want to install it
-            printf "\nALERT: 'BREW' is either not installed or the installed version is too low.\n"
+            printf "\n"
+            log_warning "'BREW' is either not installed or the installed version is too low."
             printf "The 'BREW' package is required for this script. Would you like to install it using Homebrew? (y/n): "
             read INSTALL_BREW
             if [[ $INSTALL_BREW == "y" ]]; then
                 # If the user wants to install brew, print a message and install it
-                printf "Homebrew not found, installing...\n"
+                log_info "Homebrew not found, installing..."
                 yes | /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
                 # If the operating system is macOS, add the Homebrew path to the .zprofile file
                 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -88,13 +113,14 @@ function check_brew {
                 fi
             else
                 # If the user does not want to install brew, print a message and return 1
-                printf 'Install on your own and then restart the script'
+                log_warning "Install Homebrew manually and then restart the script."
                 return 1
             fi
         fi
     else
         # If the operating system is not recognized, print a message and return 1
-        printf "\nUnsupported operating system. Please install BREW manually.\n" >&2
+        printf "\n"
+        log_error "Unsupported operating system. Please install Homebrew manually."
         return 1
     fi
 }
@@ -106,24 +132,29 @@ function install_jq {
         # Check if brew is installed
         check_brew
         # Print a message and install jq using brew
-        printf "Installing jq with brew...\n"
+        log_info "Installing jq with Homebrew..."
         brew install jq
     elif [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]] || [[ "$OSTYPE" == "win32"* ]]; then
         # Check if scoop is installed
         if command -v scoop &>/dev/null; then
             # Print a message and install jq using scoop
-            printf "Installing jq with scoop...\n"
+            log_info "Installing jq with Scoop..."
             scoop install jq
         else
             # If scoop is not installed, print a message with instructions to install jq using PowerShell and return 1
-            printf "\nALERT: 'SCOOP' is either not installed or the installed version is too low.\n
-Please install SCOOP or use the following commands from POWERSHELL as an administrator and try again.\n
-command -> Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://get.scoop.sh')\n" >&2
+            printf "\n"
+            log_warning "'SCOOP' is either not installed or the installed version is too low."
+            cat <<'EOF'
+Please install SCOOP or use the following commands from PowerShell (Run as Administrator) and try again.
+
+  Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://get.scoop.sh')
+EOF
             exit 1
         fi
     else
         # If the operating system is not recognized, print a message and return 1
-        printf "\nUnsupported operating system. Please install jq manually.\n" >&2
+        printf "\n"
+        log_error "Unsupported operating system. Please install jq manually."
         return 1
     fi
 }
@@ -135,20 +166,26 @@ function install_aws_cli {
         # Check if brew is installed
         check_brew
         # Print a message and install AWS CLI using brew
-        printf "Installing AWS CLI with brew...\n"
+        log_info "Installing AWS CLI with Homebrew..."
         brew install awscli
         return
     elif [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]] || [[ "$OSTYPE" == "win32"* ]]; then
         # If the operating system is not macOS or Linux, print a message with instructions to install AWS CLI and return 1
-printf "\nALERT: 'AWS CLI' is either not installed or the installed version is too low.\nPlease install AWS CLI using the following commands and try again.\n
-            1) Download the AWS CLI version 2 MSI installer package. Open a web browser and navigate to the following URL to download the package:
-            https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html#getting-started-install-instructions
-            2) Run the downloaded MSI installer.
-            3) Follow the instructions in the installer to complete the installation.\n\n" >&2
+        printf "\n"
+        log_warning "'AWS CLI' is either not installed or the installed version is too low."
+        cat <<'EOF'
+Install AWS CLI v2 using the following steps:
+
+  1) Download the Windows MSI installer from:
+     https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html#getting-started-install-instructions
+  2) Run the downloaded MSI installer.
+  3) Follow the installer instructions to completion.
+EOF
         exit 1
     else
         # If the operating system is not recognized, print a message and return 1
-        printf "\nUnsupported operating system. Please install jq manually.\n" >&2
+        printf "\n"
+        log_error "Unsupported operating system. Please install the AWS CLI manually."
         return 1
     fi
 }
@@ -162,7 +199,8 @@ function check_package {
     # Check if the package is installed
     if ! command -v "$package" &>/dev/null; then
         # If the package is not installed, print an alert message
-        printf "\nALERT: '%s' is either not installed or the installed version is too low.\n" "$package"
+        printf "\n"
+        log_warning "'$package' is either not installed or the installed version is too low."
 
         # Check the operating system type
         if [[ "$OSTYPE" == "darwin"* ]] || [[ "$OSTYPE" =~ "linux"* ]]; then
@@ -172,7 +210,8 @@ function check_package {
             printf "The '%s' package is required for this script. Would you like me to provide instructions for installation? (y/n): " "$package"
         else
             # If the operating system is not recognized, print a message and return 1
-            printf "\nUnsupported operating system. Please install '%s' manually.\n" >&2
+            printf "\n"
+            log_error "Unsupported operating system. Please install '$package' manually."
             return 1
         fi
 
@@ -183,7 +222,7 @@ function check_package {
             eval "$install_command"
         else
             # If the user does not want to install the package, print a message and return 1
-            printf "Please install '%s' on your own and then restart the script.\n" "$package"
+            log_warning "Please install '$package' manually and then restart the script."
             return 1
         fi
     fi
@@ -223,7 +262,7 @@ function install_node {
             nvm alias default 'lts/*'
         else
             # If the user does not want to install Node.js, print a message and return 1
-            printf 'Install NODE on your own and then restart the script'
+            log_warning "Install Node.js manually and then restart the script."
             return 1
         fi
     fi
@@ -234,14 +273,16 @@ function check_node {
     # Check if Node.js is installed
     if ! command -v node >/dev/null 2>&1; then
         # If Node.js is not installed, print an alert message and install Node.js
-        printf "\nALERT: 'Node.js' is not installed.\n"
+        printf "\n"
+        log_warning "'Node.js' is not installed."
         install_node
     else
         # If Node.js is installed, check its version
         NODE_VERSION=$(node -v | tr -d 'v')
         # If the version is less than 20, print an alert message and install Node.js
         if (($(echo "$NODE_VERSION 20.0" | awk '{print ($1 < $2)}'))); then
-            printf "\nALERT: 'Node.js' version $NODE_VERSION is not compatible. Version 20 or higher is required.\n"
+            printf "\n"
+            log_warning "'Node.js' version $NODE_VERSION is not compatible. Version 20 or higher is required."
             install_node
         fi
     fi
@@ -257,7 +298,7 @@ function check_wsl {
                 mkdir -p ~/.aws
                 cp "/mnt/c/Users/$my_user/.aws/config" ~/.aws/
             else
-                printf "The file .aws/config does not exist in your windows machine. Create it and try again."
+                log_warning "The file .aws/config does not exist on your Windows machine. Create it and try again."
             fi
         fi
     fi
@@ -291,7 +332,7 @@ function check_prerequisites {
 function prerequisites {
     # Controlla se lo script è eseguito in Bash
     if [[ -z "$BASH_VERSION" ]]; then
-        echo "ERROR: This script must be run with Bash and not with PowerShell or CMD."
+        log_error "This script must be run with Bash and not with PowerShell or CMD."
         exit 1
     fi
     set_path
@@ -392,7 +433,8 @@ function set_session_user {
             return 1
         fi
     fi
-    printf "\nINFO: Detected user $SESSION_USER\n"
+    printf "\n"
+    log_info "Detected user $SESSION_USER"
     return 0
 }
 
@@ -477,7 +519,8 @@ function valid_credentials {
             AWS_CREDENTIALS_EXPIRATION=$(grep -oP 'aws_credentials_expiration = \K\d+' ~/.aws/credentials)
             AWS_ACCOUNT_ID=$(grep -oP 'aws_account_id = \K\d+' ~/.aws/credentials)
         else
-            printf '\nMissing AWS credentials in file.\n'
+            printf "\n"
+            log_error "Missing AWS credentials in file."
             return 1
         fi
     # Check if AWS_METHOD is 'export'
@@ -486,27 +529,29 @@ function valid_credentials {
         if [[ -n "$AWS_ACCESS_KEY_ID" ]] && [[ -n "$AWS_SECRET_ACCESS_KEY" ]] && [[ -n "$AWS_SESSION_TOKEN" ]] && [[ -n "$AWS_CREDENTIALS_EXPIRATION" ]]; then
             AWS_CREDENTIALS_EXPIRATION="$AWS_CREDENTIALS_EXPIRATION"
         else
-            printf '\nWARNING: Missing AWS credentials in environment.\n'
+            printf "\n"
+            log_warning "Missing AWS credentials in environment."
             return 1
         fi
     else
-        printf '\nERROR: Invalid argument. Use "credentials" or "export".\n'
+        printf "\n"
+        log_error 'Invalid AWS method. Use "credentials" or "export".'
         return 1
     fi
 
-    printf 'INFO: Credentials found. Verifying...\n'
+    log_info "Credentials found. Verifying..."
 
     # Check if AWS_CREDENTIALS_EXPIRATION is not empty and is a number
     if [[ -z "$AWS_CREDENTIALS_EXPIRATION" ]] || ! [[ "$AWS_CREDENTIALS_EXPIRATION" =~ ^[0-9]+$ ]]; then
-        printf 'WARNING: Missing or invalid AWS credentials expiration date.\n'
+        log_warning "Missing or invalid AWS credentials expiration date."
         return 1
     # Check if AWS_CREDENTIALS_EXPIRATION is not expired and AWS_ACCOUNT_ID is equal to ACCOUNT_ID
     elif [ "$CURRENT_MS" -gt "$AWS_CREDENTIALS_EXPIRATION" ] || [ "$AWS_ACCOUNT_ID" != "$ACCOUNT_ID" ]; then
-        printf "WARNING: Incorrect AWS IAM credentials (Expired or Invalid).\n"
+        log_warning "Incorrect AWS IAM credentials (expired or invalid)."
         return 1
     else
         local difference=$((((AWS_CREDENTIALS_EXPIRATION - CURRENT_MS) % 3600) / 60))
-        printf "INFO: Time remaining until credential expiration: $difference minutes\n"
+        log_info "Time remaining until credential expiration: $difference minutes"
         return 0
     fi
 }
@@ -517,7 +562,8 @@ function install_wslu {
     if [[ "$BROWSER" != "wslview" ]]; then
         # Check if wslu is not installed
         if ! command -v wslu &>/dev/null; then
-            echo -e '\nWSLU is missing, this could cause errors. Installing now...\n'
+            printf "\n"
+            log_info "WSLU is missing, installing now..."
             # Update the package lists for upgrades and new packages
             sudo apt-get update
             # Install wslu
@@ -529,7 +575,8 @@ function install_wslu {
         echo 'export BROWSER=wslview' >>~/.bashrc
         # Source .bashrc to apply the changes
         source ~/.bashrc
-        printf '\nAttempting to re-establish AWS SSO login...\n'
+        printf "\n"
+        log_info "Attempting to re-establish AWS SSO login..."
         login_with_sso
     fi
 }
@@ -542,9 +589,11 @@ function login_with_sso {
     # Check if the account ID matches the expected account ID
     if [ "$ACCOUNT_ID_TEMP" != "$ACCOUNT_ID" ]; then
         # Loop through the output of the AWS SSO login command
-        printf "WARNING: AWS SSO session expired, login needed.\n\n"
+    log_warning "AWS SSO session expired, login needed."
+    printf "\n"
         sleep 0.1
-        printf "INFO: Logging in using AWS SSO...\n\n"
+    log_info "Logging in using AWS SSO..."
+    printf "\n"
         while IFS= read -r line; do
             echo $line
             # Check if the line contains an error message
@@ -554,7 +603,7 @@ function login_with_sso {
             fi
         done < <(aws sso login --profile "$AWS_PROFILE" 2>&1)
     else
-        printf "INFO: Session for account_id: "$ACCOUNT_ID" still valid...\n"
+        log_info "Session for account_id: $ACCOUNT_ID still valid..."
     fi
 }
 
@@ -589,13 +638,13 @@ EOF
     elif [[ "$AWS_METHOD" == "export" ]]; then
         # If the method is 'export', export the credentials as environment variables
         export AWS_ACCESS_KEY_ID=$(echo "$AWS_STS_OUTPUT" | jq -r '.Credentials.AccessKeyId')
-        printf "INFO: AWS_ACCESS_KEY_ID set.\n"
+        log_info "AWS_ACCESS_KEY_ID set."
         sleep 0.1
         export AWS_SECRET_ACCESS_KEY=$(echo "$AWS_STS_OUTPUT" | jq -r '.Credentials.SecretAccessKey')
-        printf "INFO: AWS_SECRET_ACCESS_KEY set.\n"
+        log_info "AWS_SECRET_ACCESS_KEY set."
         sleep 0.1
         export AWS_SESSION_TOKEN=$(echo "$AWS_STS_OUTPUT" | jq -r '.Credentials.SessionToken')
-        printf "INFO: AWS_SESSION_TOKEN set.\n"
+        log_info "AWS_SESSION_TOKEN set."
         sleep 0.1
         export AWS_CREDENTIALS_EXPIRATION=$(expiration_date)
         export AWS_ACCOUNT_ID=$(echo "$AWS_STS_OUTPUT" | jq -r '.AssumedRoleUser.Arn | split(":") | .[4]')
@@ -614,23 +663,23 @@ function assume_role_and_save_credentials {
     if [ $? -ne 0 ]; then
         return 1
     fi
-    printf "INFO: Updating credentials from assumed role...\n"
+    log_info "Updating credentials from assumed role..."
     # Export the credentials
     export_credentials
 
     # Check if the credentials were successfully set
     if [[ "$AWS_METHOD" == 'credentials' ]]; then
         if grep -q "\[default\]" ~/.aws/credentials && grep -q "aws_access_key_id = " ~/.aws/credentials && grep -q "aws_secret_access_key = " ~/.aws/credentials && grep -q "aws_session_token = " ~/.aws/credentials; then
-            printf "INFO: Variables set successfully in ~/.aws/credentials.\n"
+            log_info "Variables set successfully in ~/.aws/credentials."
         else
-            printf "ERROR: Cannot set variables in ~/.aws/credentials.\n"
+            log_error "Cannot set variables in ~/.aws/credentials."
             return 1
         fi
     elif [[ "$AWS_METHOD" == 'export' ]]; then
         if [[ -n "$AWS_ACCESS_KEY_ID" ]] && [[ -n "$AWS_SECRET_ACCESS_KEY" ]] && [[ -n "$AWS_SESSION_TOKEN" ]] && [[ -n "$AWS_CREDENTIALS_EXPIRATION" ]]; then
-            printf "INFO: Environment variables set successfully.\n"
+            log_info "Environment variables set successfully."
         else
-            printf "ERROR: Cannot set environment variables\n"
+            log_error "Cannot set environment variables."
             return 1
         fi
     fi
@@ -642,25 +691,25 @@ function check_aws_profiles {
     local aws_profile_var="AWS_PROFILE_$env"
     local aws_profile="${!aws_profile_var}"
     
-    printf "INFO: Checking AWS profile configuration for environment: $env\n"
+    log_info "Checking AWS profile configuration for environment: $env"
     
     # Check if AWS CLI is available
     if ! command -v aws &>/dev/null; then
-        printf "ERROR: AWS CLI is not installed or not in PATH.\n"
+        log_error "AWS CLI is not installed or not in PATH."
         return 1
     fi
     
     # Get list of configured profiles
     local configured_profiles
     if ! configured_profiles=$(aws configure list-profiles 2>/dev/null); then
-        printf "ERROR: Cannot retrieve AWS profiles. Check your AWS configuration.\n"
+        log_error "Cannot retrieve AWS profiles. Check your AWS configuration."
         printf "Make sure ~/.aws/config exists and is properly configured.\n"
         return 1
     fi
     
     # Check if the required profile exists
     if ! echo "$configured_profiles" | grep -q "^${aws_profile}$"; then
-        printf "ERROR: AWS profile '$aws_profile' is not configured.\n"
+        log_error "AWS profile '$aws_profile' is not configured."
         printf "Available profiles:\n"
         echo "$configured_profiles" | sed 's/^/  - /'
         printf "\nPlease configure the missing profile in ~/.aws/config\n"
@@ -669,67 +718,77 @@ function check_aws_profiles {
         return 1
     fi
     
-    printf "INFO: AWS profile '$aws_profile' found and configured.\n"
+    log_info "AWS profile '$aws_profile' found and configured."
     return 0
 }
 
 # Function to set the AWS credentials
 function set_aws_credentials {
+    local display_env=$(echo "$ENV" | tr '[:upper:]' '[:lower:]')
+    log_section "🔐 AWS EASY Authentication"
+    log_info "🔐 AWS authentication for environment: ${display_env:-unknown}"
+    log_info "🧩 Validating environment configuration..."
     # Check the environment variables
     check_required_variables "$1" || {
-        printf "Error installing Environment. Exiting...\n"
+        log_error "Unable to validate required environment variables."
         return 1
     }
     # Set the environment
     set_environment "$1" || {
-        printf "Error installing Environment. Exiting...\n"
+        log_error "Unable to configure AWS environment variables."
         return 1
     }
     # Check if AWS profiles are properly configured
     check_aws_profiles "$ENV" || {
-        printf "Error: AWS profiles not properly configured. Exiting...\n"
+        log_error "AWS profiles not properly configured."
         return 1
     }
+    log_info "🧰 AWS profile configuration verified."
     # Install the prerequisites
     prerequisites || {
-        printf "Error installing prerequisites. Exiting...\n"
+        log_error "Unable to install prerequisites."
         return 1
     }
+    log_info "⚙️  Local prerequisites fulfilled."
     # Set the AWS user identifier file, the session user, and the AWS method
     set_aws_user_identifier_file || {
-        echo "Error setting AWS user identifier file. Exiting..."
+        log_error "Failed to prepare AWS user identifier file."
         return 1
     }
     set_session_user || {
-        echo "Error setting session user. Exiting..."
+        log_error "Failed to determine session user."
         return 1
     }
     set_aws_method || {
-        echo "Error setting AWS method. Exiting..."
+        log_error "Failed to determine AWS credential storage method."
         return 1
     }
+    log_info "🆔 Using session user '$SESSION_USER' with method '$AWS_METHOD'."
     write_user_and_method
     # Check if the credentials are valid
     valid_credentials || {
         # If they're not, login with AWS SSO
         login_with_sso || {
-            printf "Error logging in with SSO. Exiting...\n"
+            log_error "AWS SSO login failed."
             return 1
         }
-        printf "\nINFO: Assuming role: $ROLE_NAME\n"
+        printf "\n"
+        log_info "🔑 Assuming role: $ROLE_NAME"
         # Assume the AWS role and save the credentials
         assume_role_and_save_credentials || {
-            printf "ERROR: Assuming role: $ROLE_NAME. Exiting...\n"
+            log_error "Assuming role '$ROLE_NAME' failed."
             return 1
         }
     }
     sleep 0.1
-    printf "\nSUCCESS: Successfully assumed role: $ROLE_NAME, using AWS IAM credentials.\n\n"
+    printf "\n"
+    log_success "Successfully assumed role: $ROLE_NAME, using AWS IAM credentials."
+    log_section "Account ID: $ACCOUNT_ID"
 }
 
 # Start of the script
 # Set the AWS credentials
 set_aws_credentials "$1" || {
-    printf "ERROR setting AWS credentials. Exiting...\n"
+    log_error "Failed to set AWS credentials."
     exit 1
 }
