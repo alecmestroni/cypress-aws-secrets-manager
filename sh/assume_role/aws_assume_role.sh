@@ -591,7 +591,6 @@ function login_with_sso {
         # Loop through the output of the AWS SSO login command
     log_warning "AWS SSO session expired, login needed."
     printf "\n"
-        sleep 0.1
     log_info "Logging in using AWS SSO..."
     printf "\n"
         while IFS= read -r line; do
@@ -639,13 +638,10 @@ EOF
         # If the method is 'export', export the credentials as environment variables
         export AWS_ACCESS_KEY_ID=$(echo "$AWS_STS_OUTPUT" | jq -r '.Credentials.AccessKeyId')
         log_info "AWS_ACCESS_KEY_ID set."
-        sleep 0.1
         export AWS_SECRET_ACCESS_KEY=$(echo "$AWS_STS_OUTPUT" | jq -r '.Credentials.SecretAccessKey')
         log_info "AWS_SECRET_ACCESS_KEY set."
-        sleep 0.1
         export AWS_SESSION_TOKEN=$(echo "$AWS_STS_OUTPUT" | jq -r '.Credentials.SessionToken')
         log_info "AWS_SESSION_TOKEN set."
-        sleep 0.1
         export AWS_CREDENTIALS_EXPIRATION=$(expiration_date)
         export AWS_ACCOUNT_ID=$(echo "$AWS_STS_OUTPUT" | jq -r '.AssumedRoleUser.Arn | split(":") | .[4]')
     else
@@ -780,10 +776,7 @@ function set_aws_credentials {
             return 1
         }
     }
-    sleep 0.1
-    printf "\n"
-    log_success "Successfully assumed role: $ROLE_NAME, using AWS IAM credentials."
-    log_section "Account ID: $ACCOUNT_ID"
+    log_section "Successfully assumed role: $ROLE_NAME"
 }
 
 # Start of the script
