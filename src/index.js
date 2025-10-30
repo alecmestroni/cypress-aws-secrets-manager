@@ -47,6 +47,7 @@ async function getSecretFromAWS(env, directory) {
         return env
       } else {
         warn(`⚠️ Warning loading secrets: Local file not found. Trying to fetch from AWS Secrets Manager...`)
+        info("Trying to fetch secrets from AWS Secrets Manager...")
         info(separator)
       }
     }
