@@ -7,20 +7,31 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Oldest Cypress with cy.env() and the latest release
+        cypress: ['15.10.0', 'latest']
+    name: test (cypress ${{ matrix.cypress }})
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - run: npm ci
       - run: cd test && npm ci
+      - run: cd test && npm install --no-save cypress@${{ matrix.cypress }}
       - run: cd test && npm run cy:run
       - run: cd test && npx jest
   publish-gpr:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     permissions:
