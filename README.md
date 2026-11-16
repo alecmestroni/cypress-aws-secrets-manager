@@ -20,9 +20,11 @@ Managing secrets securely and efficiently is crucial for any application. This p
   - [Library Import in `setupNodeEvents`](#library-import-in-setupnodeevents)
   - [Storing `AWS_SECRET_MANAGER_CONFIG`](#storing-AWS_SECRET_MANAGER_CONFIG)
 - [Installation](#installation)
+- [Cypress compatibility](#cypress-compatibility)
 - [Prerequisites](#prerequisites)
 - [Configuration](#configuration)
   - [Code in cypress.config.js](#code-in-cypressconfigjs)
+- [Reading secrets in your tests](#reading-secrets-in-your-tests)
 - [Functions](#functions)
   - [getSecretFromAWS](#getsecretfromaws)
   - [updateSecret](#updatesecret)
@@ -56,6 +58,19 @@ or as a global module
 $ npm install -g cypress-aws-secrets-manager
 ```
 
+## Cypress compatibility
+
+The plugin runs entirely in Node (inside `setupNodeEvents`) and merges the secrets into `config.env`, so the same version works with every Cypress release, including Cypress 16. No change is needed in `cypress.config.js`.
+
+What depends on your Cypress version is only how the secrets are read inside the tests:
+
+| Cypress    | Read the secrets in your tests with                                    |
+| ---------- | ---------------------------------------------------------------------- |
+| >= 15.10.0 | `cy.env()` (recommended, the only option from Cypress 16)              |
+| < 15.10.0  | `Cypress.env()` (deprecated in Cypress 15.10.0, removed in Cypress 16) |
+
+The plugin is tested against Cypress 15.10.0 (the first release with `cy.env()`) and the latest Cypress release. See [Reading secrets in your tests](#reading-secrets-in-your-tests).
+
 ## Prerequisites
 
 - AWS CLI [Install/Update](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
@@ -81,6 +96,39 @@ module.exports = defineConfig({
 })
 ```
 
+## Reading secrets in your tests
+
+The secrets loaded from AWS Secrets Manager are merged into the Cypress `env` configuration. Read them with the asynchronous [`cy.env()`](https://docs.cypress.io/api/commands/env) command (Cypress 15.10.0 or later): the values stay in the Node process until a test asks for them and only the key names are printed in the Command Log.
+
+```javascript
+// inside a spec file (e.g. spec.cy.js)
+cy.env(["username", "password"]).then(({ username, password }) => {
+  cy.get("#username").type(username)
+  cy.get("#password").type(password, { log: false })
+})
+```
+
+`Cypress.env()` is deprecated since Cypress 15.10.0 and has been **removed in Cypress 16**, migrate your tests as follows:
+
+```javascript
+// Before (deprecated, synchronous, the secret is surfaced in the browser)
+const token = Cypress.env("mySecret")
+
+// After (Cypress 15.10.0 and later, asynchronous, the secret stays in Node)
+cy.env(["mySecret"]).then(({ mySecret }) => {
+  // use the secret here
+})
+```
+
+A few things to keep in mind:
+
+- Do **not** copy the secrets into the `expose` configuration: `Cypress.expose()` is meant for non-sensitive values only and makes them available in the browser.
+- `AWS_SSO_STRATEGY`, `AWS_SECRET_MANAGER_CONFIG`, `AWS_SECRETS_LOCAL_DIR` and `ENV_LOG_MODE` are read by the plugin from `env`, keep them there (and keep passing overrides with `-e` / `--env`).
+- On Cypress 15.10.0 - 15.x you can set `allowCypressEnv: false` in your Cypress configuration to make sure no test still reads the secrets through `Cypress.env()` (the option no longer exists in Cypress 16, where `Cypress.env()` is already removed).
+- On Cypress versions older than 15.10.0 `cy.env()` is not available, keep using `Cypress.env("mySecret")`.
+
+See the official [migration guide](https://on.cypress.io/cypress-env-migration) for the full rationale.
+
 ## Functions
 
 ### getSecretFromAWS
@@ -89,7 +137,7 @@ module.exports = defineConfig({
 getSecretFromAWS(config.env, __dirname)
 ```
 
-The `getSecretFromAWS` function allows you to update your environment variables by adding secrets stored in AWS Secrets Manager. This function merges existing environment variables with new secrets from AWS Secrets Manager.
+The `getSecretFromAWS` function allows you to update your environment variables by adding secrets stored in AWS Secrets Manager. This function merges existing environment variables with new secrets from AWS Secrets Manager. The merged secrets are then read in your tests with `cy.env()` (see [Reading secrets in your tests](#reading-secrets-in-your-tests)).
 
 #### getSecretFromAWS Usage
 
@@ -237,7 +285,8 @@ After defining your strategy and your `AWS_SECRET_MANAGER_CONFIG`, you can impor
 module.exports = defineConfig({
   e2e: {
     async setupNodeEvents(on, config) {
-      require("cypress-env")(on, config)
+      const { setCypressEnv } = require("cypress-env")
+      config = await setCypressEnv(config, __dirname)
       const { getSecretFromAWS } = require("cypress-aws-secrets-manager")
       config.env = await getSecretFromAWS(config.env, __dirname)
       require("cypress-aws-secrets-manager/tasks")(on, config)

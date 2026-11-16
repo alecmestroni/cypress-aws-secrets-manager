@@ -1,3 +1,5 @@
+// `Cypress.env()` is deprecated since Cypress 15.10.0 and removed in Cypress 16:
+// secrets and the other `env` values are read with the async `cy.env()` command.
 describe('Cypress Integrations Tests', () => {
 
   // Configurations
@@ -6,21 +8,28 @@ describe('Cypress Integrations Tests', () => {
   });
 
   it('should have the correct homepage environment variable', () => {
-    expect(Cypress.env('homepage')).to.equal('/homepage');
+    cy.env(['homepage']).then(({ homepage }) => {
+      expect(homepage).to.equal('/homepage');
+    });
   });
 
   it('should have the correct AWS_SSO_STRATEGY environment variable', () => {
-    expect(Cypress.env('AWS_SSO_STRATEGY')).to.equal('unset');
+    cy.env(['AWS_SSO_STRATEGY']).then(({ AWS_SSO_STRATEGY }) => {
+      expect(AWS_SSO_STRATEGY).to.equal('unset');
+    });
   });
 
   it('should have the correct AWS_SECRETS_LOCAL_DIR environment variable', () => {
-    expect(Cypress.env('AWS_SECRETS_LOCAL_DIR')).to.equal('aws-secrets');
+    cy.env(['AWS_SECRETS_LOCAL_DIR']).then(({ AWS_SECRETS_LOCAL_DIR }) => {
+      expect(AWS_SECRETS_LOCAL_DIR).to.equal('aws-secrets');
+    });
   });
 
   it('should have the correct AWS_SECRET_MANAGER_CONFIG environment variable', () => {
-    const AWS_SECRET_MANAGER_CONFIG = Cypress.env('AWS_SECRET_MANAGER_CONFIG');
-    expect(AWS_SECRET_MANAGER_CONFIG).to.have.property('secretName', 'secretName');
-    expect(AWS_SECRET_MANAGER_CONFIG).to.have.property('region', 'region');
+    cy.env(['AWS_SECRET_MANAGER_CONFIG']).then(({ AWS_SECRET_MANAGER_CONFIG }) => {
+      expect(AWS_SECRET_MANAGER_CONFIG).to.have.property('secretName', 'secretName');
+      expect(AWS_SECRET_MANAGER_CONFIG).to.have.property('region', 'region');
+    });
   });
 
   // Secrets import
@@ -29,6 +38,12 @@ describe('Cypress Integrations Tests', () => {
   // because it is impossible to create a test that directly retrieves secrets from AWS Secret Manager, 
   // and share it to the community. 
   it('should have the imported correctly the local secret: superSecretName', () => {
-    expect(Cypress.env('superSecretName')).to.equal('superSecretValue');
+    cy.env(['superSecretName']).then(({ superSecretName }) => {
+      expect(superSecretName).to.equal('superSecretValue');
+    });
+  })
+
+  it('should not make the secrets available through Cypress.expose()', () => {
+    expect(Cypress.expose('superSecretName')).to.equal(undefined);
   })
 });
